@@ -222,6 +222,10 @@
                 </select>
             </div>
             <div class="toolbar-left">
+                <button class="action-btn btn-secondary" id="addRepBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                    إضافة مندوب
+                </button>
                 <button class="action-btn btn-secondary" id="exportBtn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     تصدير
@@ -283,6 +287,12 @@
                         </button>
                     </div>
                 </div>
+                <div class="fines-search-row">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input type="text" class="search-input" id="fineSearchInput" placeholder="بحث بالمندوب...">
+                    </div>
+                </div>
                 <div id="finesTableWrap"></div>
             </div>
         </div>
@@ -300,6 +310,55 @@
         <h2 class="modal-title" id="modalTitle">تم بنجاح!</h2>
         <p class="modal-desc" id="modalDesc">تمت العملية بنجاح</p>
         <button class="action-btn btn-primary" id="modalCloseBtn">تمام</button>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="addRepModal">
+    <div class="modal-box wide-modal">
+        <h2 class="modal-title">إضافة مندوب جديد</h2>
+        <p class="modal-desc">هيتضاف تلقائيًا ويظهر لأي مشرف شيفته بيتقاطع مع شيفت المندوب</p>
+
+        <div class="add-rep-form">
+            <div class="form-group">
+                <label class="form-label-mini">اسم المندوب</label>
+                <input type="text" class="form-select" id="newRepName" placeholder="مثال: أحمد محمد">
+            </div>
+            <div class="form-group">
+                <label class="form-label-mini">البريد الإلكتروني (اختياري)</label>
+                <input type="email" class="form-select" id="newRepEmail" placeholder="example@mail.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label-mini">الفرع</label>
+                <select class="form-select" id="newRepBranch">
+                    <option value="">-- اختر الفرع --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label-mini">نوع الدوام</label>
+                <div class="segmented-control" id="newRepTypeControl">
+                    <button type="button" class="segmented-btn active" data-value="full">دوام كامل</button>
+                    <button type="button" class="segmented-btn" data-value="part">دوام جزئي</button>
+                </div>
+            </div>
+            <div class="fines-form-row">
+                <div class="form-group">
+                    <label class="form-label-mini">من الساعة</label>
+                    <select class="form-select" id="newRepStart"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label-mini">إلى الساعة</label>
+                    <select class="form-select" id="newRepEnd"></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-actions">
+            <button class="action-btn btn-secondary" id="cancelAddRepBtn">إلغاء</button>
+            <button class="action-btn btn-primary" id="confirmAddRepBtn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                إضافة المندوب
+            </button>
+        </div>
     </div>
 </div>
 
