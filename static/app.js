@@ -106,6 +106,24 @@ const App = (function () {
         CONFIG.supervisor_shifts.forEach(s => {
             shiftSel.innerHTML += `<option value="${s.id}">🕐 ${s.label}</option>`;
         });
+
+        const newRepBranch = document.getElementById('newRepBranch');
+        newRepBranch.innerHTML = '<option value="">-- اختر الفرع --</option>';
+        Object.entries(CONFIG.branches).forEach(([id, b]) => {
+            newRepBranch.innerHTML += `<option value="${id}">📍 ${b.label}</option>`;
+        });
+
+        const startSel = document.getElementById('newRepStart');
+        const endSel = document.getElementById('newRepEnd');
+        startSel.innerHTML = '';
+        endSel.innerHTML = '';
+        for (let h = 0; h < 24; h++) {
+            const label = fmtHour(h);
+            startSel.innerHTML += `<option value="${h}">${label}</option>`;
+            endSel.innerHTML += `<option value="${h}">${label}</option>`;
+        }
+        startSel.value = 9;
+        endSel.value = 17;
     }
 
     function bindStaticEvents() {
@@ -124,6 +142,18 @@ const App = (function () {
         document.getElementById('tabPart').addEventListener('click', () => switchTypeTab('part'));
         document.getElementById('tabFines').addEventListener('click', () => switchTypeTab('fines'));
         document.getElementById('addFineBtn').addEventListener('click', addFine);
+        document.getElementById('fineSearchInput').addEventListener('input', renderFinesTable);
+
+        document.getElementById('addRepBtn').addEventListener('click', openAddRepModal);
+        document.getElementById('cancelAddRepBtn').addEventListener('click', closeAddRepModal);
+        document.getElementById('addRepModal').addEventListener('click', e => { if (e.target.id === 'addRepModal') closeAddRepModal(); });
+        document.getElementById('confirmAddRepBtn').addEventListener('click', submitAddRep);
+        document.querySelectorAll('#newRepTypeControl .segmented-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#newRepTypeControl .segmented-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
         document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
         document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
@@ -659,6 +689,49 @@ const App = (function () {
         await loadFines();
     }
 
+    // ============================================================
+    // Add Rep modal (إضافة مندوب جديد)
+    // ============================================================
+    function openAddRepModal() {
+        document.getElementById('newRepName').value = '';
+        document.getElementById('newRepEmail').value = '';
+        document.getElementById('newRepBranch').value = session ? session.branch : '';
+        document.querySelectorAll('#newRepTypeControl .segmented-btn').forEach(b => b.classList.toggle('active', b.dataset.value === 'full'));
+        document.getElementById('newRepStart').value = 9;
+        document.getElementById('newRepEnd').value = 17;
+        document.getElementById('addRepModal').classList.add('show');
+    }
+
+    function closeAddRepModal() {
+        document.getElementById('addRepModal').classList.remove('show');
+    }
+
+    async function submitAddRep() {
+        const name = document.getElementById('newRepName').value.trim();
+        const email = document.getElementById('newRepEmail').value.trim();
+        const branch = document.getElementById('newRepBranch').value;
+        const typeBtn = document.querySelector('#newRepTypeControl .segmented-btn.active');
+        const repType = typeBtn ? typeBtn.dataset.value : 'full';
+        const start = parseInt(document.getElementById('newRepStart').value);
+        const end = parseInt(document.getElementById('newRepEnd').value);
+
+        if (!name) { showToast('تنبيه', 'يرجى إدخال اسم المندوب', 'error'); return; }
+        if (!branch) { showToast('تنبيه', 'يرجى اختيار الفرع', 'error'); return; }
+
+        await fetchJSON('/api/manage_reps', {
+            method: 'POST',
+            body: { name, email, branch, rep_type: repType, start, end },
+        });
+
+        closeAddRepModal();
+        showModal('تمت الإضافة!', `تم إضافة ${name} بنجاح، وهيظهر تلقائيًا لأي مشرف شيفته بيتقاطع معاه`);
+        launchConfetti();
+
+        if (session && session.branch === branch) {
+            await loadReps();
+        }
+    }
+
     function renderFinesTable() {
         const wrap = document.getElementById('finesTableWrap');
         const disabled = shiftClosed;
@@ -668,12 +741,19 @@ const App = (function () {
         document.getElementById('fineReasonInput').disabled = disabled;
         document.getElementById('addFineBtn').disabled = disabled;
 
+        const q = (document.getElementById('fineSearchInput').value || '').toLowerCase().trim();
+        const list = q ? finesCache.filter(f => f.rep_name.toLowerCase().includes(q)) : finesCache;
+
         if (finesCache.length === 0) {
             wrap.innerHTML = '<div class="empty-state">لا توجد غرامات مسجلة لهذا الشيفت</div>';
             return;
         }
+        if (list.length === 0) {
+            wrap.innerHTML = '<div class="empty-state">لا توجد نتائج مطابقة للبحث</div>';
+            return;
+        }
 
-        const total = finesCache.reduce((sum, f) => sum + f.amount, 0);
+        const total = list.reduce((sum, f) => sum + f.amount, 0);
 
         wrap.innerHTML = `
             <table class="reps-table">
@@ -686,7 +766,7 @@ const App = (function () {
                     </tr>
                 </thead>
                 <tbody>
-                    ${finesCache.map(f => `
+                    ${list.map(f => `
                         <tr>
                             <td><div class="rep-name">${f.rep_name}</div></td>
                             <td class="center"><span class="fine-amount">${f.amount.toLocaleString('ar-EG')} ج.م</span></td>
@@ -703,7 +783,7 @@ const App = (function () {
                 </tbody>
             </table>
             <div class="fines-total-bar">
-                <span>إجمالي الغرامات:</span>
+                <span>إجمالي ${q ? 'نتائج البحث' : 'الغرامات'}:</span>
                 <span class="fines-total-value">${total.toLocaleString('ar-EG')} ج.م</span>
             </div>
         `;
