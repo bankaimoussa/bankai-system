@@ -4,8 +4,9 @@ const App = (function () {
     let CONFIG = null;        // /api/branches response
     let session = null;       // { branch, supervisor_id, supervisor_name, shift_id, day }
     let repsCache = [];       // آخر نتيجة من /api/reps
+    let finesCache = [];      // آخر نتيجة من /api/fines
     let shiftClosed = false;
-    let activeType = 'full';  // 'full' | 'part' -- التاب النشط
+    let activeType = 'full';  // 'full' | 'part' | 'fines' -- التاب النشط
 
     const avatarColors = ['#2563eb', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
@@ -23,6 +24,52 @@ const App = (function () {
 
         CONFIG = await fetchJSON('/api/branches');
         populateBranches();
+
+        await tryRestoreSession();
+    }
+
+    // ============================================================
+    // Session persistence (خليه فاضل بعد الريفرش لحد ما يعمل logout فعليًا)
+    // ============================================================
+    const SESSION_KEY = 'bankai_session';
+
+    function saveSessionToStorage() {
+        try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
+    }
+
+    function clearSessionFromStorage() {
+        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    }
+
+    async function tryRestoreSession() {
+        let saved = null;
+        try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
+        if (!saved || !saved.branch || !saved.supervisor_id || !saved.shift_id || !saved.day) return;
+
+        const branchObj = CONFIG.branches[saved.branch];
+        const sup = branchObj && branchObj.supervisors.find(s => s.id === saved.supervisor_id);
+        const shift = CONFIG.supervisor_shifts.find(s => s.id === saved.shift_id);
+        if (!branchObj || !sup || !shift) { clearSessionFromStorage(); return; }
+
+        session = saved;
+
+        document.getElementById('branchSelect').value = saved.branch;
+        onBranchChange();
+        document.getElementById('supervisorSelect').value = saved.supervisor_id;
+        document.getElementById('shiftSelect').value = saved.shift_id;
+        document.getElementById('daySelect').value = saved.day;
+
+        document.getElementById('userName').textContent = sup.name;
+        document.getElementById('userAvatar').textContent = sup.name.charAt(0);
+
+        document.getElementById('loginScreen').style.display = 'none';
+        const mainApp = document.getElementById('mainApp');
+        mainApp.classList.add('active');
+
+        updateDate();
+        renderShiftBanner();
+        await loadReps();
+        await loadFines();
     }
 
     // ============================================================
@@ -75,6 +122,8 @@ const App = (function () {
         document.getElementById('closeShiftBtn').addEventListener('click', closeShift);
         document.getElementById('tabFull').addEventListener('click', () => switchTypeTab('full'));
         document.getElementById('tabPart').addEventListener('click', () => switchTypeTab('part'));
+        document.getElementById('tabFines').addEventListener('click', () => switchTypeTab('fines'));
+        document.getElementById('addFineBtn').addEventListener('click', addFine);
         document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
         document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
@@ -124,6 +173,7 @@ const App = (function () {
             branch, supervisor_id: supId, supervisor_name: sup.name,
             shift_id: shiftId, shift_label: shift.label, day,
         };
+        saveSessionToStorage();
 
         document.getElementById('userName').textContent = sup.name;
         document.getElementById('userAvatar').textContent = sup.name.charAt(0);
@@ -143,6 +193,7 @@ const App = (function () {
             updateDate();
             renderShiftBanner();
             await loadReps();
+            await loadFines();
 
             setTimeout(() => showToast('مرحباً!', `أهلاً بك ${sup.name} - ${CONFIG.branches[branch].label}`), 400);
         }, 500);
@@ -176,6 +227,7 @@ const App = (function () {
             document.getElementById('shiftSelect').value = '';
             document.getElementById('loginBtn').disabled = true;
             session = null;
+            clearSessionFromStorage();
         }, 400);
     }
 
@@ -205,6 +257,7 @@ const App = (function () {
         renderTable();
         updateStats();
         updateCloseButtonState();
+        populateFineRepSelect();
     }
 
     function updateCloseButtonState() {
@@ -222,8 +275,27 @@ const App = (function () {
     function renderTable() {
         const table = document.getElementById('repsTable');
         const emptyState = document.getElementById('emptyState');
+        const finesPanel = document.getElementById('finesPanel');
+        const toolbar = document.querySelector('.toolbar');
+        const statsBar = document.querySelector('.stats-bar');
 
         updateTypeTabCounts();
+
+        if (activeType === 'fines') {
+            table.style.display = 'none';
+            table.innerHTML = '';
+            emptyState.style.display = 'none';
+            if (toolbar) toolbar.style.display = 'none';
+            if (statsBar) statsBar.style.display = 'none';
+            finesPanel.style.display = 'block';
+            renderFinesTable();
+            return;
+        }
+
+        table.style.display = '';
+        finesPanel.style.display = 'none';
+        if (toolbar) toolbar.style.display = '';
+        if (statsBar) statsBar.style.display = '';
 
         const filtered = repsCache.filter(r => r.type === activeType);
 
@@ -260,6 +332,7 @@ const App = (function () {
         const partCount = repsCache.filter(r => r.type === 'part').length;
         document.getElementById('countFull').textContent = fullCount;
         document.getElementById('countPart').textContent = partCount;
+        document.getElementById('countFines').textContent = finesCache.length;
     }
 
     function switchTypeTab(type) {
@@ -267,6 +340,7 @@ const App = (function () {
         activeType = type;
         document.getElementById('tabFull').classList.toggle('active', type === 'full');
         document.getElementById('tabPart').classList.toggle('active', type === 'part');
+        document.getElementById('tabFines').classList.toggle('active', type === 'fines');
         renderTable();
     }
 
@@ -517,6 +591,125 @@ const App = (function () {
     }
 
     // ============================================================
+    // Fines (الغرامات)
+    // ============================================================
+    async function loadFines() {
+        const qs = new URLSearchParams({
+            branch: session.branch,
+            supervisor_id: session.supervisor_id,
+            shift_id: session.shift_id,
+            day: session.day,
+        });
+        const data = await fetchJSON('/api/fines?' + qs.toString());
+        finesCache = data.fines;
+        populateFineRepSelect();
+        if (activeType === 'fines') renderFinesTable();
+        updateTypeTabCounts();
+    }
+
+    function populateFineRepSelect() {
+        const sel = document.getElementById('fineRepSelect');
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">-- اختر المندوب --</option>';
+        repsCache.forEach(rep => {
+            sel.innerHTML += `<option value="${escapeAttr(rep.name)}">${rep.name} (${rep.type === 'full' ? 'دوام كامل' : 'دوام جزئي'})</option>`;
+        });
+        if (current) sel.value = current;
+    }
+
+    async function addFine() {
+        if (shiftClosed) { showToast('تنبيه', 'الشيفت مقفول', 'error'); return; }
+        const repName = document.getElementById('fineRepSelect').value;
+        const amountInput = document.getElementById('fineAmountInput');
+        const reasonInput = document.getElementById('fineReasonInput');
+        const amount = parseFloat(amountInput.value);
+        const reason = reasonInput.value.trim();
+
+        if (!repName) { showToast('تنبيه', 'يرجى اختيار المندوب', 'error'); return; }
+        if (!amount || amount <= 0) { showToast('تنبيه', 'يرجى إدخال مبلغ صحيح', 'error'); return; }
+        if (!reason) { showToast('تنبيه', 'يرجى كتابة سبب الغرامة', 'error'); return; }
+
+        await fetchJSON('/api/fines', {
+            method: 'POST',
+            body: {
+                branch: session.branch,
+                supervisor_id: session.supervisor_id,
+                supervisor_name: session.supervisor_name,
+                supervisor_shift_id: session.shift_id,
+                day: session.day,
+                rep_name: repName,
+                amount, reason,
+            },
+        });
+
+        amountInput.value = '';
+        reasonInput.value = '';
+        document.getElementById('fineRepSelect').value = '';
+
+        showToast('تم', 'تم تسجيل الغرامة بنجاح');
+        await loadFines();
+    }
+
+    async function deleteFine(id) {
+        if (shiftClosed) { showToast('تنبيه', 'الشيفت مقفول', 'error'); return; }
+        if (!confirm('هل تريد حذف هذه الغرامة؟')) return;
+        await fetchJSON('/api/fines/' + id, { method: 'DELETE' });
+        showToast('تم', 'تم حذف الغرامة');
+        await loadFines();
+    }
+
+    function renderFinesTable() {
+        const wrap = document.getElementById('finesTableWrap');
+        const disabled = shiftClosed;
+
+        document.getElementById('fineRepSelect').disabled = disabled;
+        document.getElementById('fineAmountInput').disabled = disabled;
+        document.getElementById('fineReasonInput').disabled = disabled;
+        document.getElementById('addFineBtn').disabled = disabled;
+
+        if (finesCache.length === 0) {
+            wrap.innerHTML = '<div class="empty-state">لا توجد غرامات مسجلة لهذا الشيفت</div>';
+            return;
+        }
+
+        const total = finesCache.reduce((sum, f) => sum + f.amount, 0);
+
+        wrap.innerHTML = `
+            <table class="reps-table">
+                <thead>
+                    <tr>
+                        <th>المندوب</th>
+                        <th class="center">المبلغ (جنيه)</th>
+                        <th>السبب</th>
+                        <th style="width: 60px; text-align: left;">حذف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${finesCache.map(f => `
+                        <tr>
+                            <td><div class="rep-name">${f.rep_name}</div></td>
+                            <td class="center"><span class="fine-amount">${f.amount.toLocaleString('ar-EG')} ج.م</span></td>
+                            <td>${f.reason || '-'}</td>
+                            <td>
+                                <div class="row-actions">
+                                    <button class="icon-btn" ${disabled ? 'disabled' : ''} onclick="App.deleteFine(${f.id})" title="حذف">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            <div class="fines-total-bar">
+                <span>إجمالي الغرامات:</span>
+                <span class="fines-total-value">${total.toLocaleString('ar-EG')} ج.م</span>
+            </div>
+        `;
+    }
+
+    // ============================================================
     // Stats + filtering
     // ============================================================
     function updateStats() {
@@ -672,7 +865,7 @@ const App = (function () {
     }
 
     return {
-        init, logout, setAtt, setReason, stepNum, setNum, resetRow, saveOne,
+        init, logout, setAtt, setReason, stepNum, setNum, resetRow, saveOne, deleteFine,
     };
 })();
 
