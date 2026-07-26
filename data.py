@@ -20,9 +20,9 @@ BRANCHES = {
         {"id": "S-003", "name": "ياسر محمود"},
     ]},
     "qcd2": {"label": "QCD 2 - الفرع الثاني", "supervisors": [
-        {"id": "S-004", "name": "Saad"},
-        {"id": "S-005", "name": "Bankai"},
-        {"id": "S-006", "name": "Taha"},
+        {"id": "S-004", "name": "كريم عبدالله"},
+        {"id": "S-005", "name": "طارق إبراهيم"},
+        {"id": "S-006", "name": "هشام سعيد"},
     ]},
 }
 
@@ -97,6 +97,9 @@ def get_supervisor_shift(shift_id):
 
 def rep_end_hour(rep):
     """نهاية شيفت المندوب (float 0-24، ممكن تلف فوق 24 لو عدت نص الليل)."""
+    if "_end_override" in rep:
+        end = rep["_end_override"]
+        return end if end > rep["start"] else end + 24
     dur = DURATION_HOURS[rep["type"]]
     return rep["start"] + dur
 
@@ -125,12 +128,13 @@ def intervals_overlap(a_start, a_end, b_start, b_end):
     return False
 
 
-def get_overlapping_reps(branch, supervisor_shift_id):
-    """المندوبين اللي شيفتهم بيتقاطع مع شيفت المشرف، لفرع معين."""
+def get_overlapping_reps(branch, supervisor_shift_id, extra_reps=None):
+    """المندوبين اللي شيفتهم بيتقاطع مع شيفت المشرف، لفرع معين.
+    extra_reps: مندوبين إضافيين (من قاعدة البيانات) بيتضافوا لقائمة الفرع الثابتة."""
     shift = get_supervisor_shift(supervisor_shift_id)
     if not shift:
         return []
-    reps = REPS_BY_BRANCH.get(branch, [])
+    reps = list(REPS_BY_BRANCH.get(branch, [])) + list(extra_reps or [])
     result = []
     for rep in reps:
         rep_end = rep_end_hour(rep)
