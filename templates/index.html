@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BANKAI - نظام تقييم المندوبين</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/tajawal@5.0.0/index.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.0/index.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="bg-animation">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+</div>
+<div class="grid-pattern"></div>
+<div class="particles" id="particles"></div>
+
+<div class="toast-container" id="toastContainer"></div>
+<div class="confetti-container" id="confettiContainer"></div>
+
+<!-- ============ LOGIN ============ -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-wrapper">
+        <div class="login-illustration">
+            <div class="orbit orbit-1"><div class="orbit-dot"></div></div>
+            <div class="orbit orbit-2"><div class="orbit-dot"></div></div>
+            <div class="illustration-icon">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="100%" stop-color="#a5f3fc"/>
+                        </linearGradient>
+                        <linearGradient id="accentGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#06b6d4"/>
+                            <stop offset="100%" stop-color="#0891b2"/>
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="2" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <path d="M50 8 L85 27 L85 73 L50 92 L15 73 L15 27 Z"
+                          fill="none" stroke="url(#hexGrad)" stroke-width="2.5" opacity="0.6"/>
+                    <path d="M50 16 L78 32 L78 68 L50 84 L22 68 L22 32 Z"
+                          fill="url(#hexGrad)" opacity="0.15"/>
+                    <g filter="url(#glow)">
+                        <path d="M38 28 L38 72 L58 72 C66 72 71 68 71 62 C71 57 68 53 63 52 C67 51 70 47 70 42 C70 36 65 28 58 28 Z M46 35 L56 35 C60 35 63 38 63 42 C63 46 60 49 56 49 L46 49 Z M46 55 L58 55 C62 55 64 58 64 62 C64 66 62 69 58 69 L46 69 Z"
+                              fill="white"/>
+                    </g>
+                    <circle cx="78" cy="72" r="3" fill="url(#accentGrad)">
+                        <animate attributeName="r" values="3;4;3" dur="2s" repeatCount="indefinite"/>
+                    </circle>
+                    <circle cx="86" cy="64" r="2.5" fill="url(#accentGrad)" opacity="0.8"/>
+                    <circle cx="90" cy="72" r="2" fill="url(#accentGrad)" opacity="0.6"/>
+                    <path d="M78 72 L86 64 L90 72" fill="none" stroke="url(#accentGrad)" stroke-width="1.5" opacity="0.7"/>
+                </svg>
+            </div>
+            <h2 class="illustration-title">BANKAI</h2>
+            <p class="illustration-desc">نظام متكامل لإدارة وتقييم أداء المندوبين حسب الشيفت والتقاطع الزمني</p>
+            <ul class="feature-list">
+                <li>عرض المندوبين المتقاطعين مع شيفتك فقط</li>
+                <li>تقييم يومي محفوظ بشكل دائم</li>
+                <li>إنهاء الشيفت وتصدير تقرير CSV</li>
+                <li>واجهة عصرية وآمنة</li>
+            </ul>
+        </div>
+        <div class="login-form-section">
+            <div class="login-header">
+                <span class="login-badge">🔐 منطقة المشرفين</span>
+                <h1>تسجيل الدخول</h1>
+                <p>اختر الفرع والمشرف وشيفتك وتاريخ اليوم</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><span class="step">1</span>اختر الفرع</label>
+                <div class="custom-select-wrapper">
+                    <select class="form-select" id="branchSelect">
+                        <option value="">-- اختر الفرع --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><span class="step">2</span>اختر المشرف</label>
+                <div class="custom-select-wrapper">
+                    <select class="form-select" id="supervisorSelect" disabled>
+                        <option value="">-- اختر الفرع أولاً --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><span class="step">3</span>اختر شيفتك</label>
+                <div class="custom-select-wrapper">
+                    <select class="form-select" id="shiftSelect">
+                        <option value="">-- اختر الشيفت --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label"><span class="step">4</span>التاريخ</label>
+                <input type="date" class="form-select" id="daySelect">
+            </div>
+            <button class="login-btn" id="loginBtn" disabled>
+                <span>تسجيل الدخول</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+            </button>
+            <div class="login-footer">© 2026 BANKAI Systems - جميع الحقوق محفوظة</div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MAIN APP ============ -->
+<div class="main-app" id="mainApp">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="nav-logo">
+                <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="hexGradSmall" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="100%" stop-color="#a5f3fc"/>
+                        </linearGradient>
+                        <linearGradient id="accentGradSmall" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#06b6d4"/>
+                            <stop offset="100%" stop-color="#0891b2"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M50 8 L85 27 L85 73 L50 92 L15 73 L15 27 Z"
+                          fill="none" stroke="url(#hexGradSmall)" stroke-width="3" opacity="0.5"/>
+                    <path d="M50 16 L78 32 L78 68 L50 84 L22 68 L22 32 Z"
+                          fill="url(#hexGradSmall)" opacity="0.1"/>
+                    <path d="M38 28 L38 72 L58 72 C66 72 71 68 71 62 C71 57 68 53 63 52 C67 51 70 47 70 42 C70 36 65 28 58 28 Z M46 35 L56 35 C60 35 63 38 63 42 C63 46 60 49 56 49 L46 49 Z M46 55 L58 55 C62 55 64 58 64 62 C64 66 62 69 58 69 L46 69 Z"
+                          fill="white"/>
+                    <circle cx="80" cy="70" r="4" fill="url(#accentGradSmall)"/>
+                </svg>
+            </div>
+            <div>
+                <div class="nav-title">BANKAI</div>
+                <div class="nav-subtitle" id="navSubtitle">لوحة تقييم المندوبين</div>
+            </div>
+        </div>
+        <div class="nav-actions">
+            <div class="date-badge">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+                <span id="currentDate"></span>
+            </div>
+            <div class="user-chip">
+                <div class="user-avatar" id="userAvatar">م</div>
+                <span class="user-name" id="userName">المشرف</span>
+            </div>
+            <button class="logout-btn" onclick="App.logout()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+                خروج
+            </button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="current-shift-banner" id="currentShiftBanner"></div>
+
+        <div class="stats-bar">
+            <div class="stat-mini">
+                <div class="stat-mini-icon blue">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                </div>
+                <div class="stat-mini-info">
+                    <div class="stat-mini-label">إجمالي المندوبين</div>
+                    <div class="stat-mini-value" id="statTotal">0</div>
+                </div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-icon green">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                </div>
+                <div class="stat-mini-info">
+                    <div class="stat-mini-label">حضر</div>
+                    <div class="stat-mini-value" id="statPresent">0</div>
+                </div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-icon orange">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.2 14.2L15 15V7h1.5v7.4l1.3 1.3-1.6 1.5z"/></svg>
+                </div>
+                <div class="stat-mini-info">
+                    <div class="stat-mini-label">تأخير</div>
+                    <div class="stat-mini-value" id="statLate">0</div>
+                </div>
+            </div>
+            <div class="stat-mini">
+                <div class="stat-mini-icon red">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+                </div>
+                <div class="stat-mini-info">
+                    <div class="stat-mini-label">غياب</div>
+                    <div class="stat-mini-value" id="statAbsent">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <div class="toolbar-right">
+                <div class="search-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" class="search-input" id="searchInput" placeholder="بحث بالاسم...">
+                </div>
+                <select class="filter-select" id="filterSelect">
+                    <option value="all">الكل</option>
+                    <option value="present">حضر فقط</option>
+                    <option value="late">تأخير فقط</option>
+                    <option value="absent">غياب فقط</option>
+                    <option value="pending">لم يقيّم</option>
+                </select>
+            </div>
+            <div class="toolbar-left">
+                <button class="action-btn btn-secondary" id="exportBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    تصدير
+                </button>
+                <button class="action-btn btn-danger" id="closeShiftBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    إنهاء الشيفت
+                </button>
+                <button class="action-btn btn-primary" id="saveAllBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    حفظ الكل
+                </button>
+            </div>
+        </div>
+
+        <div class="reps-table-wrapper">
+            <table class="reps-table" id="repsTable"></table>
+        </div>
+        <div class="empty-state" id="emptyState" style="display:none;">
+            لا يوجد مندوبين متقاطعين مع هذا الشيفت في هذا اليوم
+        </div>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="modal">
+    <div class="modal-box">
+        <div class="modal-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h2 class="modal-title" id="modalTitle">تم بنجاح!</h2>
+        <p class="modal-desc" id="modalDesc">تمت العملية بنجاح</p>
+        <button class="action-btn btn-primary" id="modalCloseBtn">تمام</button>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
