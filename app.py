@@ -1,872 +1,471 @@
-const App = (function () {
-    "use strict";
-
-    let CONFIG = null;        // /api/branches response
-    let session = null;       // { branch, supervisor_id, supervisor_name, shift_id, day }
-    let repsCache = [];       // آخر نتيجة من /api/reps
-    let finesCache = [];      // آخر نتيجة من /api/fines
-    let shiftClosed = false;
-    let activeType = 'full';  // 'full' | 'part' | 'fines' -- التاب النشط
-
-    const avatarColors = ['#2563eb', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
-
-    // ============================================================
-    // Init
-    // ============================================================
-    async function init() {
-        createParticles();
-        setupRippleEffect();
-        bindStaticEvents();
-        initTheme();
-
-        const today = new Date();
-        document.getElementById('daySelect').value = today.toISOString().split('T')[0];
-
-        CONFIG = await fetchJSON('/api/branches');
-        populateBranches();
-
-        await tryRestoreSession();
-    }
-
-    // ============================================================
-    // Session persistence (خليه فاضل بعد الريفرش لحد ما يعمل logout فعليًا)
-    // ============================================================
-    const SESSION_KEY = 'bankai_session';
-
-    function saveSessionToStorage() {
-        try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
-    }
-
-    function clearSessionFromStorage() {
-        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
-    }
-
-    async function tryRestoreSession() {
-        let saved = null;
-        try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
-        if (!saved || !saved.branch || !saved.supervisor_id || !saved.shift_id || !saved.day) return;
-
-        const branchObj = CONFIG.branches[saved.branch];
-        const sup = branchObj && branchObj.supervisors.find(s => s.id === saved.supervisor_id);
-        const shift = CONFIG.supervisor_shifts.find(s => s.id === saved.shift_id);
-        if (!branchObj || !sup || !shift) { clearSessionFromStorage(); return; }
-
-        session = saved;
-
-        document.getElementById('branchSelect').value = saved.branch;
-        onBranchChange();
-        document.getElementById('supervisorSelect').value = saved.supervisor_id;
-        document.getElementById('shiftSelect').value = saved.shift_id;
-        document.getElementById('daySelect').value = saved.day;
-
-        document.getElementById('userName').textContent = sup.name;
-        document.getElementById('userAvatar').textContent = sup.name.charAt(0);
-
-        document.getElementById('loginScreen').style.display = 'none';
-        const mainApp = document.getElementById('mainApp');
-        mainApp.classList.add('active');
-
-        updateDate();
-        renderShiftBanner();
-        await loadReps();
-        await loadFines();
-    }
-
-    // ============================================================
-    // Theme (light/dark)
-    // ============================================================
-    function initTheme() {
-        let saved = null;
-        try { saved = localStorage.getItem('bankai_theme'); } catch (e) {}
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        const theme = saved || (prefersDark ? 'dark' : 'light');
-        applyTheme(theme);
-        document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
-    }
-
-    function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        try { localStorage.setItem('bankai_theme', theme); } catch (e) {}
-    }
-
-    function toggleTheme() {
-        const current = document.documentElement.getAttribute('data-theme') || 'light';
-        applyTheme(current === 'dark' ? 'light' : 'dark');
-    }
-
-    function populateBranches() {
-        const sel = document.getElementById('branchSelect');
-        sel.innerHTML = '<option value="">-- اختر الفرع --</option>';
-        Object.entries(CONFIG.branches).forEach(([id, b]) => {
-            sel.innerHTML += `<option value="${id}">📍 ${b.label}</option>`;
-        });
-
-        const shiftSel = document.getElementById('shiftSelect');
-        shiftSel.innerHTML = '<option value="">-- اختر الشيفت --</option>';
-        CONFIG.supervisor_shifts.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.id}">🕐 ${s.label}</option>`;
-        });
-    }
-
-    function bindStaticEvents() {
-        document.getElementById('branchSelect').addEventListener('change', onBranchChange);
-        document.getElementById('supervisorSelect').addEventListener('change', validateLoginForm);
-        document.getElementById('shiftSelect').addEventListener('change', validateLoginForm);
-        document.getElementById('daySelect').addEventListener('change', validateLoginForm);
-        document.getElementById('loginBtn').addEventListener('click', login);
-
-        document.getElementById('searchInput').addEventListener('input', applyFilter);
-        document.getElementById('filterSelect').addEventListener('change', applyFilter);
-        document.getElementById('exportBtn').addEventListener('click', exportData);
-        document.getElementById('saveAllBtn').addEventListener('click', saveAll);
-        document.getElementById('closeShiftBtn').addEventListener('click', closeShift);
-        document.getElementById('tabFull').addEventListener('click', () => switchTypeTab('full'));
-        document.getElementById('tabPart').addEventListener('click', () => switchTypeTab('part'));
-        document.getElementById('tabFines').addEventListener('click', () => switchTypeTab('fines'));
-        document.getElementById('addFineBtn').addEventListener('click', addFine);
-        document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
-        document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-    }
-
-    function onBranchChange() {
-        const branch = document.getElementById('branchSelect').value;
-        const supSelect = document.getElementById('supervisorSelect');
-        supSelect.innerHTML = '<option value="">-- اختر المشرف --</option>';
-        if (branch && CONFIG.branches[branch]) {
-            supSelect.disabled = false;
-            CONFIG.branches[branch].supervisors.forEach(s => {
-                supSelect.innerHTML += `<option value="${s.id}">👤 ${s.name} (${s.id})</option>`;
-            });
-        } else {
-            supSelect.disabled = true;
-        }
-        validateLoginForm();
-    }
-
-    function validateLoginForm() {
-        const branch = document.getElementById('branchSelect').value;
-        const sup = document.getElementById('supervisorSelect').value;
-        const shift = document.getElementById('shiftSelect').value;
-        const day = document.getElementById('daySelect').value;
-        document.getElementById('loginBtn').disabled = !(branch && sup && shift && day);
-    }
-
-    // ============================================================
-    // Login / Logout
-    // ============================================================
-    async function login() {
-        const branch = document.getElementById('branchSelect').value;
-        const supId = document.getElementById('supervisorSelect').value;
-        const shiftId = document.getElementById('shiftSelect').value;
-        const day = document.getElementById('daySelect').value;
-
-        if (!branch || !supId || !shiftId || !day) {
-            showToast('خطأ', 'يرجى استكمال كل الحقول', 'error');
-            return;
-        }
-
-        const sup = CONFIG.branches[branch].supervisors.find(s => s.id === supId);
-        const shift = CONFIG.supervisor_shifts.find(s => s.id === shiftId);
-
-        session = {
-            branch, supervisor_id: supId, supervisor_name: sup.name,
-            shift_id: shiftId, shift_label: shift.label, day,
-        };
-        saveSessionToStorage();
-
-        document.getElementById('userName').textContent = sup.name;
-        document.getElementById('userAvatar').textContent = sup.name.charAt(0);
-
-        const loginScreen = document.getElementById('loginScreen');
-        const mainApp = document.getElementById('mainApp');
-
-        loginScreen.style.transition = 'opacity 0.5s, transform 0.5s';
-        loginScreen.style.opacity = '0';
-        loginScreen.style.transform = 'scale(0.95)';
-
-        setTimeout(async () => {
-            loginScreen.style.display = 'none';
-            mainApp.classList.add('active', 'entering');
-            setTimeout(() => mainApp.classList.remove('entering'), 800);
-
-            updateDate();
-            renderShiftBanner();
-            await loadReps();
-            await loadFines();
-
-            setTimeout(() => showToast('مرحباً!', `أهلاً بك ${sup.name} - ${CONFIG.branches[branch].label}`), 400);
-        }, 500);
-    }
-
-    function logout() {
-        const mainApp = document.getElementById('mainApp');
-        const loginScreen = document.getElementById('loginScreen');
-
-        mainApp.style.transition = 'opacity 0.4s, transform 0.4s';
-        mainApp.style.opacity = '0';
-        mainApp.style.transform = 'scale(0.98)';
-
-        setTimeout(() => {
-            mainApp.classList.remove('active');
-            mainApp.style.opacity = '';
-            mainApp.style.transform = '';
-
-            loginScreen.style.display = 'flex';
-            loginScreen.style.opacity = '0';
-            loginScreen.style.transform = 'scale(1.05)';
-            setTimeout(() => {
-                loginScreen.style.transition = 'opacity 0.5s, transform 0.5s';
-                loginScreen.style.opacity = '1';
-                loginScreen.style.transform = 'scale(1)';
-            }, 50);
-
-            document.getElementById('branchSelect').value = '';
-            document.getElementById('supervisorSelect').innerHTML = '<option value="">-- اختر الفرع أولاً --</option>';
-            document.getElementById('supervisorSelect').disabled = true;
-            document.getElementById('shiftSelect').value = '';
-            document.getElementById('loginBtn').disabled = true;
-            session = null;
-            clearSessionFromStorage();
-        }, 400);
-    }
-
-    function renderShiftBanner() {
-        const banner = document.getElementById('currentShiftBanner');
-        const dateStr = new Date(session.day + 'T00:00:00').toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        banner.innerHTML = `
-            <span>🕐 شيفتك: ${session.shift_label} &nbsp;|&nbsp; 📅 ${dateStr}</span>
-            ${shiftClosed ? '<span class="badge-closed">🔒 الشيفت مقفول</span>' : ''}
-        `;
-    }
-
-    // ============================================================
-    // Load reps for current session
-    // ============================================================
-    async function loadReps() {
-        const qs = new URLSearchParams({
-            branch: session.branch,
-            supervisor_id: session.supervisor_id,
-            shift_id: session.shift_id,
-            day: session.day,
-        });
-        const data = await fetchJSON('/api/reps?' + qs.toString());
-        repsCache = data.reps;
-        shiftClosed = data.shift_closed;
-        renderShiftBanner();
-        renderTable();
-        updateStats();
-        updateCloseButtonState();
-        populateFineRepSelect();
-    }
-
-    function updateCloseButtonState() {
-        const btn = document.getElementById('closeShiftBtn');
-        btn.disabled = shiftClosed;
-        btn.innerHTML = shiftClosed
-            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> الشيفت مقفول'
-            : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> إنهاء الشيفت';
-        document.getElementById('saveAllBtn').disabled = shiftClosed;
-    }
-
-    // ============================================================
-    // Render table
-    // ============================================================
-    function renderTable() {
-        const table = document.getElementById('repsTable');
-        const emptyState = document.getElementById('emptyState');
-        const finesPanel = document.getElementById('finesPanel');
-        const toolbar = document.querySelector('.toolbar');
-        const statsBar = document.querySelector('.stats-bar');
-
-        updateTypeTabCounts();
-
-        if (activeType === 'fines') {
-            table.style.display = 'none';
-            table.innerHTML = '';
-            emptyState.style.display = 'none';
-            if (toolbar) toolbar.style.display = 'none';
-            if (statsBar) statsBar.style.display = 'none';
-            finesPanel.style.display = 'block';
-            renderFinesTable();
-            return;
-        }
-
-        table.style.display = '';
-        finesPanel.style.display = 'none';
-        if (toolbar) toolbar.style.display = '';
-        if (statsBar) statsBar.style.display = '';
-
-        const filtered = repsCache.filter(r => r.type === activeType);
-
-        if (filtered.length === 0) {
-            table.innerHTML = '';
-            emptyState.style.display = 'block';
-            emptyState.textContent = repsCache.length === 0
-                ? 'لا يوجد مندوبين متقاطعين مع هذا الشيفت في هذا اليوم'
-                : `لا يوجد مندوبين ${activeType === 'full' ? 'دوام كامل' : 'دوام جزئي'} في هذا الشيفت`;
-            return;
-        }
-        emptyState.style.display = 'none';
-
-        table.innerHTML = `
-            <thead>
-                <tr>
-                    <th style="width: 30px;"></th>
-                    <th>المندوب</th>
-                    <th>الحضور</th>
-                    <th class="center">الأوردرات</th>
-                    <th class="center">MISS</th>
-                    <th>الأداء</th>
-                    <th style="width: 100px; text-align: left;">إجراءات</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${filtered.map((rep, i) => renderRow(rep, i)).join('')}
-            </tbody>
-        `;
-    }
-
-    function updateTypeTabCounts() {
-        const fullCount = repsCache.filter(r => r.type === 'full').length;
-        const partCount = repsCache.filter(r => r.type === 'part').length;
-        document.getElementById('countFull').textContent = fullCount;
-        document.getElementById('countPart').textContent = partCount;
-        document.getElementById('countFines').textContent = finesCache.length;
-    }
-
-    function switchTypeTab(type) {
-        if (type === activeType) return;
-        activeType = type;
-        document.getElementById('tabFull').classList.toggle('active', type === 'full');
-        document.getElementById('tabPart').classList.toggle('active', type === 'part');
-        document.getElementById('tabFines').classList.toggle('active', type === 'fines');
-        renderTable();
-    }
-
-    function fmtHour(h) {
-        const hh = Math.floor(h) % 24;
-        const period = hh >= 12 ? 'م' : 'ص';
-        const h12 = hh % 12 === 0 ? 12 : hh % 12;
-        return `${h12}:00 ${period}`;
-    }
-
-    function renderRow(rep, idx) {
-        const initials = rep.name.split(' ').slice(0, 2).map(w => w[0]).join('');
-        const color = avatarColors[idx % avatarColors.length];
-        const orders = rep.orders || 0;
-        const miss = rep.miss || 0;
-        const maxOrders = 60;
-        const perfPct = Math.min((orders / maxOrders) * 100, 100);
-        const perfClass = miss > 3 ? 'danger' : miss > 1 ? 'warn' : '';
-        const isSaved = rep.saved;
-        const disabled = shiftClosed;
-
-        return `
-            <tr data-name="${escapeAttr(rep.name)}" data-att="${rep.attendance || 'pending'}" class="${isSaved ? 'saved' : ''}">
-                <td><span class="status-dot ${isSaved ? 'saved' : 'pending'}" title="${isSaved ? 'محفوظ' : 'غير محفوظ'}"></span></td>
-                <td>
-                    <div class="rep-cell">
-                        <div class="rep-avatar" style="background: linear-gradient(135deg, ${color}, ${color}cc);">${initials}</div>
-                        <div class="rep-info-main">
-                            <div class="rep-name">${rep.name}</div>
-                            <div class="rep-meta-row">
-                                <span class="type-badge ${rep.type === 'full' ? 'full' : 'part'}">${rep.type === 'full' ? 'دوام كامل' : 'دوام جزئي'}</span>
-                                <span class="rep-shift-row">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                                    ${fmtHour(rep.start)} - ${fmtHour(rep.end_hour)}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </td>
-                <td>
-                    <div class="attendance-group">
-                        <button class="att-chip ${rep.attendance === 'present' ? 'present' : ''}" ${disabled ? 'disabled' : ''} onclick="App.setAtt('${escapeJs(rep.name)}','present')">✓ حضر</button>
-                        <button class="att-chip ${rep.attendance === 'late' ? 'late' : ''}" ${disabled ? 'disabled' : ''} onclick="App.setAtt('${escapeJs(rep.name)}','late')">⏰ تأخير</button>
-                        <button class="att-chip ${rep.attendance === 'absent' ? 'absent' : ''}" ${disabled ? 'disabled' : ''} onclick="App.setAtt('${escapeJs(rep.name)}','absent')">✗ غياب</button>
-                    </div>
-                    ${(rep.attendance === 'late' || rep.attendance === 'absent') ? `
-                        <div class="reason-badge-select">
-                            <button class="reason-mini-btn ${rep.reason === 'with' ? 'active' : ''}" ${disabled ? 'disabled' : ''} onclick="App.setReason('${escapeJs(rep.name)}','with')">بسبب</button>
-                            <button class="reason-mini-btn ${rep.reason === 'without' ? 'active' : ''}" ${disabled ? 'disabled' : ''} onclick="App.setReason('${escapeJs(rep.name)}','without')">بدون سبب</button>
-                        </div>
-                    ` : ''}
-                    ${rep.reason ? `<div class="reason-badge ${rep.reason}">${rep.reason === 'with' ? '📋 بسبب' : '⚠ بدون سبب'}</div>` : ''}
-                </td>
-                <td class="center">
-                    <div class="stepper">
-                        <button class="stepper-btn" ${disabled ? 'disabled' : ''} onclick="App.stepNum('${escapeJs(rep.name)}','orders',-1)">−</button>
-                        <input type="number" class="stepper-input" value="${orders}" min="0" ${disabled ? 'disabled' : ''} onchange="App.setNum('${escapeJs(rep.name)}','orders',this.value)">
-                        <button class="stepper-btn" ${disabled ? 'disabled' : ''} onclick="App.stepNum('${escapeJs(rep.name)}','orders',1)">+</button>
-                    </div>
-                </td>
-                <td class="center">
-                    <div class="stepper miss">
-                        <button class="stepper-btn" ${disabled ? 'disabled' : ''} onclick="App.stepNum('${escapeJs(rep.name)}','miss',-1)">−</button>
-                        <input type="number" class="stepper-input" value="${miss}" min="0" ${disabled ? 'disabled' : ''} onchange="App.setNum('${escapeJs(rep.name)}','miss',this.value)">
-                        <button class="stepper-btn" ${disabled ? 'disabled' : ''} onclick="App.stepNum('${escapeJs(rep.name)}','miss',1)">+</button>
-                    </div>
-                </td>
-                <td>
-                    <div class="progress-wrap">
-                        <div class="progress-bar"><div class="progress-fill ${perfClass}" style="width: ${perfPct}%"></div></div>
-                        <div class="progress-text"><span>${orders} أوردر</span><span>${miss} miss</span></div>
-                    </div>
-                </td>
-                <td>
-                    <div class="row-actions">
-                        <button class="icon-btn save-btn ${isSaved ? 'saved' : ''}" ${disabled ? 'disabled' : ''} onclick="App.saveOne('${escapeJs(rep.name)}')" title="حفظ">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                        </button>
-                        <button class="icon-btn" ${disabled ? 'disabled' : ''} onclick="App.resetRow('${escapeJs(rep.name)}')" title="إعادة تعيين">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                        </button>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }
-
-    function findRep(name) { return repsCache.find(r => r.name === name); }
-
-    // ============================================================
-    // Mutations (optimistic local update + API save)
-    // ============================================================
-    async function setAtt(name, type) {
-        if (shiftClosed) return;
-        const rep = findRep(name);
-        rep.attendance = type;
-        rep.reason = null;
-        rep.saved = false;
-        renderTable();
-        updateStats();
-        await persist(rep, { attendance: type, reason: null, saved: false });
-    }
-
-    async function setReason(name, reason) {
-        if (shiftClosed) return;
-        const rep = findRep(name);
-        rep.reason = reason;
-        rep.saved = false;
-        renderTable();
-        await persist(rep, { reason, saved: false });
-    }
-
-    async function stepNum(name, field, delta) {
-        if (shiftClosed) return;
-        const rep = findRep(name);
-        rep[field] = Math.max(0, (rep[field] || 0) + delta);
-        rep.saved = false;
-        renderTable();
-        updateStats();
-        await persist(rep, { [field]: rep[field], saved: false });
-    }
-
-    async function setNum(name, field, val) {
-        if (shiftClosed) return;
-        const rep = findRep(name);
-        rep[field] = Math.max(0, parseInt(val) || 0);
-        rep.saved = false;
-        renderTable();
-        updateStats();
-        await persist(rep, { [field]: rep[field], saved: false });
-    }
-
-    async function resetRow(name) {
-        if (shiftClosed) return;
-        if (!confirm('هل تريد إعادة تعيين بيانات هذا المندوب؟')) return;
-        const rep = findRep(name);
-        await fetchJSON('/api/reset', {
-            method: 'POST',
-            body: {
-                day: session.day, branch: session.branch,
-                supervisor_id: session.supervisor_id, supervisor_shift_id: session.shift_id,
-                rep_name: name,
-            },
-        });
-        rep.attendance = null; rep.reason = null; rep.orders = 0; rep.miss = 0; rep.saved = false;
-        renderTable();
-        updateStats();
-        showToast('تم', 'تم إعادة تعيين البيانات');
-    }
-
-    async function saveOne(name) {
-        if (shiftClosed) return;
-        const rep = findRep(name);
-        if (!rep.attendance) { showToast('تنبيه', 'يرجى تحديد حالة الحضور أولاً', 'error'); return; }
-        if ((rep.attendance === 'late' || rep.attendance === 'absent') && !rep.reason) {
-            showToast('تنبيه', 'يرجى تحديد السبب', 'error'); return;
-        }
-        rep.saved = true;
-        await persist(rep, { saved: true });
-        renderTable();
-        showToast('تم الحفظ ✓', `تم حفظ تقييم ${rep.name}`);
-        setTimeout(() => {
-            const row = document.querySelector(`tr[data-name="${cssEscape(rep.name)}"]`);
-            if (row) { row.classList.add('just-saved'); setTimeout(() => row.classList.remove('just-saved'), 1000); }
-        }, 50);
-    }
-
-    async function saveAll() {
-        if (shiftClosed) return;
-        let count = 0, errors = 0;
-        for (const rep of repsCache) {
-            if (rep.attendance) {
-                if ((rep.attendance === 'late' || rep.attendance === 'absent') && !rep.reason) {
-                    errors++;
-                } else {
-                    rep.saved = true;
-                    await persist(rep, { saved: true });
-                    count++;
-                }
-            }
-        }
-        renderTable();
-        updateStats();
-        if (count === 0 && errors === 0) { showToast('تنبيه', 'لا توجد تقييمات للحفظ', 'error'); return; }
-        if (errors > 0) showToast('تنبيه', `هناك ${errors} مندوب يحتاج لتحديد السبب`, 'error');
-        if (count > 0) {
-            showModal('تم الحفظ بنجاح!', `تم حفظ ${count} تقييم للمندوبين`);
-            launchConfetti();
-        }
-    }
-
-    async function persist(rep, extra) {
-        await fetchJSON('/api/evaluate', {
-            method: 'POST',
-            body: {
-                branch: session.branch,
-                supervisor_id: session.supervisor_id,
-                supervisor_name: session.supervisor_name,
-                supervisor_shift_id: session.shift_id,
-                day: session.day,
-                rep_name: rep.name,
-                rep_type: rep.type,
-                rep_start: rep.start,
-                attendance: rep.attendance,
-                reason: rep.reason,
-                orders: rep.orders,
-                miss: rep.miss,
-                ...extra,
-            },
-        });
-    }
-
-    // ============================================================
-    // Close shift
-    // ============================================================
-    async function closeShift() {
-        if (shiftClosed) return;
-        if (!confirm('هل أنت متأكد من إنهاء الشيفت؟ لن تتمكن من تعديل التقييمات بعد ذلك.')) return;
-
-        await fetchJSON('/api/close_shift', {
-            method: 'POST',
-            body: {
-                branch: session.branch,
-                supervisor_id: session.supervisor_id,
-                supervisor_name: session.supervisor_name,
-                supervisor_shift_id: session.shift_id,
-                day: session.day,
-            },
-        });
-
-        shiftClosed = true;
-        renderShiftBanner();
-        renderTable();
-        updateCloseButtonState();
-        showModal('تم إنهاء الشيفت!', 'سيتم الآن تحميل ملف تقرير الشيفت');
-        launchConfetti();
-        exportData();
-    }
-
-    function exportData() {
-        const qs = new URLSearchParams({
-            branch: session.branch,
-            supervisor_id: session.supervisor_id,
-            shift_id: session.shift_id,
-            day: session.day,
-        });
-        window.location.href = '/api/export_csv?' + qs.toString();
-    }
-
-    // ============================================================
-    // Fines (الغرامات)
-    // ============================================================
-    async function loadFines() {
-        const qs = new URLSearchParams({
-            branch: session.branch,
-            supervisor_id: session.supervisor_id,
-            shift_id: session.shift_id,
-            day: session.day,
-        });
-        const data = await fetchJSON('/api/fines?' + qs.toString());
-        finesCache = data.fines;
-        populateFineRepSelect();
-        if (activeType === 'fines') renderFinesTable();
-        updateTypeTabCounts();
-    }
-
-    function populateFineRepSelect() {
-        const sel = document.getElementById('fineRepSelect');
-        if (!sel) return;
-        const current = sel.value;
-        sel.innerHTML = '<option value="">-- اختر المندوب --</option>';
-        repsCache.forEach(rep => {
-            sel.innerHTML += `<option value="${escapeAttr(rep.name)}">${rep.name} (${rep.type === 'full' ? 'دوام كامل' : 'دوام جزئي'})</option>`;
-        });
-        if (current) sel.value = current;
-    }
-
-    async function addFine() {
-        if (shiftClosed) { showToast('تنبيه', 'الشيفت مقفول', 'error'); return; }
-        const repName = document.getElementById('fineRepSelect').value;
-        const amountInput = document.getElementById('fineAmountInput');
-        const reasonInput = document.getElementById('fineReasonInput');
-        const amount = parseFloat(amountInput.value);
-        const reason = reasonInput.value.trim();
-
-        if (!repName) { showToast('تنبيه', 'يرجى اختيار المندوب', 'error'); return; }
-        if (!amount || amount <= 0) { showToast('تنبيه', 'يرجى إدخال مبلغ صحيح', 'error'); return; }
-        if (!reason) { showToast('تنبيه', 'يرجى كتابة سبب الغرامة', 'error'); return; }
-
-        await fetchJSON('/api/fines', {
-            method: 'POST',
-            body: {
-                branch: session.branch,
-                supervisor_id: session.supervisor_id,
-                supervisor_name: session.supervisor_name,
-                supervisor_shift_id: session.shift_id,
-                day: session.day,
-                rep_name: repName,
-                amount, reason,
-            },
-        });
-
-        amountInput.value = '';
-        reasonInput.value = '';
-        document.getElementById('fineRepSelect').value = '';
-
-        showToast('تم', 'تم تسجيل الغرامة بنجاح');
-        await loadFines();
-    }
-
-    async function deleteFine(id) {
-        if (shiftClosed) { showToast('تنبيه', 'الشيفت مقفول', 'error'); return; }
-        if (!confirm('هل تريد حذف هذه الغرامة؟')) return;
-        await fetchJSON('/api/fines/' + id, { method: 'DELETE' });
-        showToast('تم', 'تم حذف الغرامة');
-        await loadFines();
-    }
-
-    function renderFinesTable() {
-        const wrap = document.getElementById('finesTableWrap');
-        const disabled = shiftClosed;
-
-        document.getElementById('fineRepSelect').disabled = disabled;
-        document.getElementById('fineAmountInput').disabled = disabled;
-        document.getElementById('fineReasonInput').disabled = disabled;
-        document.getElementById('addFineBtn').disabled = disabled;
-
-        if (finesCache.length === 0) {
-            wrap.innerHTML = '<div class="empty-state">لا توجد غرامات مسجلة لهذا الشيفت</div>';
-            return;
-        }
-
-        const total = finesCache.reduce((sum, f) => sum + f.amount, 0);
-
-        wrap.innerHTML = `
-            <table class="reps-table">
-                <thead>
-                    <tr>
-                        <th>المندوب</th>
-                        <th class="center">المبلغ (جنيه)</th>
-                        <th>السبب</th>
-                        <th style="width: 60px; text-align: left;">حذف</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${finesCache.map(f => `
-                        <tr>
-                            <td><div class="rep-name">${f.rep_name}</div></td>
-                            <td class="center"><span class="fine-amount">${f.amount.toLocaleString('ar-EG')} ج.م</span></td>
-                            <td>${f.reason || '-'}</td>
-                            <td>
-                                <div class="row-actions">
-                                    <button class="icon-btn" ${disabled ? 'disabled' : ''} onclick="App.deleteFine(${f.id})" title="حذف">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-            <div class="fines-total-bar">
-                <span>إجمالي الغرامات:</span>
-                <span class="fines-total-value">${total.toLocaleString('ar-EG')} ج.م</span>
-            </div>
-        `;
-    }
-
-    // ============================================================
-    // Stats + filtering
-    // ============================================================
-    function updateStats() {
-        let present = 0, late = 0, absent = 0;
-        repsCache.forEach(rep => {
-            if (rep.attendance === 'present') present++;
-            else if (rep.attendance === 'late') late++;
-            else if (rep.attendance === 'absent') absent++;
-        });
-        animateNum('statTotal', repsCache.length);
-        animateNum('statPresent', present);
-        animateNum('statLate', late);
-        animateNum('statAbsent', absent);
-    }
-
-    function animateNum(id, target) {
-        const el = document.getElementById(id);
-        const cur = parseInt(el.textContent) || 0;
-        if (cur === target) return;
-        el.classList.add('bump');
-        setTimeout(() => el.classList.remove('bump'), 500);
-        const dur = 400, steps = 20, inc = (target - cur) / steps;
-        let step = 0;
-        const t = setInterval(() => {
-            step++;
-            el.textContent = Math.round(cur + inc * step);
-            if (step >= steps) { el.textContent = target; clearInterval(t); }
-        }, dur / steps);
-    }
-
-    function applyFilter() {
-        const q = document.getElementById('searchInput').value.toLowerCase();
-        const f = document.getElementById('filterSelect').value;
-        document.querySelectorAll('.reps-table tbody tr').forEach(row => {
-            const name = row.dataset.name.toLowerCase();
-            const att = row.dataset.att;
-            const matchSearch = !q || name.includes(q);
-            let matchFilter = true;
-            if (f === 'pending') matchFilter = att === 'pending' || !att;
-            else if (f !== 'all') matchFilter = att === f;
-            const shouldShow = matchSearch && matchFilter;
-            if (shouldShow) {
-                row.style.display = '';
-                row.style.opacity = '1';
-                row.style.transform = '';
-            } else {
-                row.style.opacity = '0';
-                row.style.transform = 'scale(0.95)';
-                setTimeout(() => { if (row.style.opacity === '0') row.style.display = 'none'; }, 200);
-            }
-        });
-    }
-
-    // ============================================================
-    // Utilities
-    // ============================================================
-    function updateDate() {
-        const now = new Date();
-        const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        document.getElementById('currentDate').textContent = now.toLocaleDateString('ar-EG', opts);
-    }
-
-    async function fetchJSON(url, opts) {
-        opts = opts || {};
-        const fetchOpts = { method: opts.method || 'GET', headers: {} };
-        if (opts.body) {
-            fetchOpts.headers['Content-Type'] = 'application/json';
-            fetchOpts.body = JSON.stringify(opts.body);
-        }
-        const res = await fetch(url, fetchOpts);
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: 'unknown_error' }));
-            showToast('خطأ', err.error === 'shift_closed' ? 'الشيفت مقفول بالفعل' : 'حدث خطأ في الاتصال', 'error');
-            throw new Error(err.error || 'request_failed');
-        }
-        return res.json();
-    }
-
-    function escapeAttr(s) { return String(s).replace(/"/g, '&quot;'); }
-    function escapeJs(s) { return String(s).replace(/'/g, "\\'"); }
-    function cssEscape(s) { return String(s).replace(/"/g, '\\"'); }
-
-    function showToast(title, msg, type) {
-        const container = document.getElementById('toastContainer');
-        const toast = document.createElement('div');
-        toast.className = `toast ${type === 'error' ? 'error' : ''}`;
-        toast.innerHTML = `
-            <div class="toast-icon">
-                ${type === 'error'
-                    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
-                    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'}
-            </div>
-            <div class="toast-content"><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>
-        `;
-        container.appendChild(toast);
-        setTimeout(() => { toast.classList.add('removing'); setTimeout(() => toast.remove(), 400); }, 3000);
-    }
-
-    function showModal(title, desc) {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalDesc').textContent = desc;
-        document.getElementById('modal').classList.add('show');
-    }
-    function closeModal() { document.getElementById('modal').classList.remove('show'); }
-
-    function createParticles() {
-        const container = document.getElementById('particles');
-        for (let i = 0; i < 30; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            p.style.left = Math.random() * 100 + '%';
-            p.style.animationDuration = (15 + Math.random() * 20) + 's';
-            p.style.animationDelay = Math.random() * 20 + 's';
-            p.style.opacity = 0.3 + Math.random() * 0.5;
-            const size = 2 + Math.random() * 4;
-            p.style.width = size + 'px';
-            p.style.height = size + 'px';
-            container.appendChild(p);
-        }
-    }
-
-    function setupRippleEffect() {
-        document.addEventListener('click', function (e) {
-            const btn = e.target.closest('.action-btn, .login-btn, .att-chip, .reason-mini-btn');
-            if (!btn) return;
-            const rect = btn.getBoundingClientRect();
-            const ripple = document.createElement('span');
-            ripple.className = 'ripple';
-            const size = Math.max(rect.width, rect.height);
-            ripple.style.width = ripple.style.height = size + 'px';
-            ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
-            ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
-            if (btn.classList.contains('btn-secondary')) ripple.style.background = 'rgba(37, 99, 235, 0.2)';
-            btn.appendChild(ripple);
-            setTimeout(() => ripple.remove(), 600);
-        });
-    }
-
-    function launchConfetti() {
-        const container = document.getElementById('confettiContainer');
-        const colors = ['#2563eb', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#ec4899'];
-        for (let i = 0; i < 50; i++) {
-            const c = document.createElement('div');
-            c.className = 'confetti';
-            c.style.left = Math.random() * 100 + '%';
-            c.style.background = colors[Math.floor(Math.random() * colors.length)];
-            c.style.animationDelay = Math.random() * 0.5 + 's';
-            c.style.animationDuration = (2 + Math.random() * 2) + 's';
-            if (Math.random() > 0.5) c.style.borderRadius = '50%';
-            container.appendChild(c);
-            setTimeout(() => c.remove(), 4000);
-        }
-    }
-
-    return {
-        init, logout, setAtt, setReason, stepNum, setNum, resetRow, saveOne, deleteFine,
-    };
-})();
-
-document.addEventListener('DOMContentLoaded', App.init);
+# -*- coding: utf-8 -*-
+import os
+import io
+from datetime import datetime, date
+
+from flask import Flask, request, jsonify, render_template, Response
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+from models import db, Evaluation, ShiftSession, Fine
+import data as D
+
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'bankai.db')}"
+).replace("postgres://", "postgresql://", 1)  # Railway بيدي postgres:// أحيانًا
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+
+# ============================================================
+# Pages
+# ============================================================
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+# ============================================================
+# Static config data (branches, supervisors, shifts)
+# ============================================================
+@app.route("/api/branches")
+def api_branches():
+    return jsonify({
+        "branches": {
+            bid: {"label": b["label"], "supervisors": b["supervisors"]}
+            for bid, b in D.BRANCHES.items()
+        },
+        "supervisor_shifts": D.SUPERVISOR_SHIFTS,
+    })
+
+
+# ============================================================
+# Reps overlapping a supervisor's shift, merged with saved evaluations
+# ============================================================
+@app.route("/api/reps")
+def api_reps():
+    branch = request.args.get("branch", "")
+    supervisor_id = request.args.get("supervisor_id", "")
+    supervisor_shift_id = request.args.get("shift_id", "")
+    day = request.args.get("day", "")
+
+    if not all([branch, supervisor_id, supervisor_shift_id, day]):
+        return jsonify({"error": "missing params"}), 400
+
+    reps = D.get_overlapping_reps(branch, supervisor_shift_id)
+
+    # هات التقييمات المحفوظة لنفس (اليوم/الفرع/المشرف/شيفته)
+    evals = Evaluation.query.filter_by(
+        day=day, branch=branch,
+        supervisor_id=supervisor_id,
+        supervisor_shift_id=supervisor_shift_id,
+    ).all()
+    evals_by_name = {e.rep_name: e for e in evals}
+
+    session = ShiftSession.query.filter_by(
+        day=day, branch=branch,
+        supervisor_id=supervisor_id,
+        supervisor_shift_id=supervisor_shift_id,
+    ).first()
+
+    out = []
+    for rep in reps:
+        ev = evals_by_name.get(rep["name"])
+        out.append({
+            "name": rep["name"],
+            "type": rep["type"],
+            "start": rep["start"],
+            "end_hour": D.rep_end_hour(rep) % 24,
+            "attendance": ev.attendance if ev else None,
+            "reason": ev.reason if ev else None,
+            "orders": ev.orders if ev else 0,
+            "miss": ev.miss if ev else 0,
+            "saved": ev.saved if ev else False,
+        })
+
+    return jsonify({
+        "reps": out,
+        "shift_closed": session is not None,
+    })
+
+
+# ============================================================
+# Save / upsert a single rep evaluation
+# ============================================================
+@app.route("/api/evaluate", methods=["POST"])
+def api_evaluate():
+    payload = request.get_json(force=True) or {}
+
+    required = ["branch", "supervisor_id", "supervisor_name", "supervisor_shift_id",
+                "day", "rep_name", "rep_type", "rep_start"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"error": f"missing: {missing}"}), 400
+
+    # امنع الحفظ لو الشيفت اتقفل بالفعل
+    session = ShiftSession.query.filter_by(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+    ).first()
+    if session:
+        return jsonify({"error": "shift_closed"}), 409
+
+    ev = Evaluation.query.filter_by(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+        rep_name=payload["rep_name"],
+    ).first()
+
+    if not ev:
+        ev = Evaluation(
+            day=payload["day"], branch=payload["branch"],
+            supervisor_id=payload["supervisor_id"],
+            supervisor_name=payload["supervisor_name"],
+            supervisor_shift_id=payload["supervisor_shift_id"],
+            rep_name=payload["rep_name"],
+            rep_type=payload["rep_type"],
+            rep_start=payload["rep_start"],
+        )
+        db.session.add(ev)
+
+    if "attendance" in payload:
+        ev.attendance = payload["attendance"]
+    if "reason" in payload:
+        ev.reason = payload["reason"]
+    if "orders" in payload:
+        ev.orders = max(0, int(payload["orders"]))
+    if "miss" in payload:
+        ev.miss = max(0, int(payload["miss"]))
+    if "saved" in payload:
+        ev.saved = bool(payload["saved"])
+
+    db.session.commit()
+    return jsonify({"ok": True, "evaluation": ev.to_dict()})
+
+
+# ============================================================
+# Reset a single rep's evaluation for the day
+# ============================================================
+@app.route("/api/reset", methods=["POST"])
+def api_reset():
+    payload = request.get_json(force=True) or {}
+    ev = Evaluation.query.filter_by(
+        day=payload.get("day"), branch=payload.get("branch"),
+        supervisor_id=payload.get("supervisor_id"),
+        supervisor_shift_id=payload.get("supervisor_shift_id"),
+        rep_name=payload.get("rep_name"),
+    ).first()
+    if ev:
+        db.session.delete(ev)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ============================================================
+# Close shift -> lock evaluations + return CSV export
+# ============================================================
+@app.route("/api/close_shift", methods=["POST"])
+def api_close_shift():
+    payload = request.get_json(force=True) or {}
+    required = ["branch", "supervisor_id", "supervisor_name", "supervisor_shift_id", "day"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"error": f"missing: {missing}"}), 400
+
+    existing = ShiftSession.query.filter_by(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+    ).first()
+    if not existing:
+        session = ShiftSession(
+            day=payload["day"], branch=payload["branch"],
+            supervisor_id=payload["supervisor_id"],
+            supervisor_name=payload["supervisor_name"],
+            supervisor_shift_id=payload["supervisor_shift_id"],
+        )
+        db.session.add(session)
+
+    evals = Evaluation.query.filter_by(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+    ).all()
+    for ev in evals:
+        ev.closed = True
+
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ============================================================
+# Fines (الغرامات)
+# ============================================================
+@app.route("/api/fines")
+def api_fines_list():
+    branch = request.args.get("branch", "")
+    supervisor_id = request.args.get("supervisor_id", "")
+    supervisor_shift_id = request.args.get("shift_id", "")
+    day = request.args.get("day", "")
+
+    if not all([branch, supervisor_id, supervisor_shift_id, day]):
+        return jsonify({"error": "missing params"}), 400
+
+    fines = Fine.query.filter_by(
+        day=day, branch=branch,
+        supervisor_id=supervisor_id,
+        supervisor_shift_id=supervisor_shift_id,
+    ).order_by(Fine.created_at.desc()).all()
+
+    return jsonify({"fines": [f.to_dict() for f in fines]})
+
+
+@app.route("/api/fines", methods=["POST"])
+def api_fines_add():
+    payload = request.get_json(force=True) or {}
+    required = ["branch", "supervisor_id", "supervisor_name", "supervisor_shift_id",
+                "day", "rep_name", "amount"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"error": f"missing: {missing}"}), 400
+
+    session = ShiftSession.query.filter_by(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+    ).first()
+    if session:
+        return jsonify({"error": "shift_closed"}), 409
+
+    try:
+        amount = float(payload["amount"])
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_amount"}), 400
+    if amount <= 0:
+        return jsonify({"error": "invalid_amount"}), 400
+
+    fine = Fine(
+        day=payload["day"], branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_name=payload["supervisor_name"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+        rep_name=payload["rep_name"],
+        amount=amount,
+        reason=(payload.get("reason") or "").strip(),
+    )
+    db.session.add(fine)
+    db.session.commit()
+    return jsonify({"ok": True, "fine": fine.to_dict()})
+
+
+@app.route("/api/fines/<int:fine_id>", methods=["DELETE"])
+def api_fines_delete(fine_id):
+    fine = Fine.query.get(fine_id)
+    if fine:
+        db.session.delete(fine)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ============================================================
+# Export -> ملف Excel منظم بشيتين: التقييمات + الغرامات
+# ============================================================
+HEADER_FILL = PatternFill("solid", fgColor="1E3A8A")
+HEADER_FONT = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+TITLE_FONT = Font(name="Calibri", size=16, bold=True, color="1E3A8A")
+SUBTITLE_FONT = Font(name="Calibri", size=11, color="475569")
+THIN = Side(style="thin", color="CBD5E1")
+CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
+LEFT = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+ROW_FILL_EVEN = PatternFill("solid", fgColor="F1F5F9")
+ROW_FILL_PRESENT = PatternFill("solid", fgColor="DCFCE7")
+ROW_FILL_LATE = PatternFill("solid", fgColor="FEF3C7")
+ROW_FILL_ABSENT = PatternFill("solid", fgColor="FEE2E2")
+FINE_FILL = PatternFill("solid", fgColor="FEE2E2")
+
+
+def _sheet_header(ws, title, subtitle, ncols):
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+    c = ws.cell(row=1, column=1, value=title)
+    c.font = TITLE_FONT
+    c.alignment = Alignment(horizontal="right", vertical="center")
+    ws.row_dimensions[1].height = 26
+
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
+    c2 = ws.cell(row=2, column=1, value=subtitle)
+    c2.font = SUBTITLE_FONT
+    c2.alignment = Alignment(horizontal="right", vertical="center")
+    ws.row_dimensions[2].height = 20
+    ws.sheet_view.rightToLeft = True
+
+
+def _write_table_header(ws, row, headers):
+    for i, h in enumerate(headers, start=1):
+        c = ws.cell(row=row, column=i, value=h)
+        c.font = HEADER_FONT
+        c.fill = HEADER_FILL
+        c.alignment = CENTER
+        c.border = CELL_BORDER
+    ws.row_dimensions[row].height = 22
+
+
+@app.route("/api/export_csv")
+def api_export_csv():
+    branch = request.args.get("branch", "")
+    supervisor_id = request.args.get("supervisor_id", "")
+    supervisor_shift_id = request.args.get("shift_id", "")
+    day = request.args.get("day", "")
+
+    evals = Evaluation.query.filter_by(
+        day=day, branch=branch,
+        supervisor_id=supervisor_id,
+        supervisor_shift_id=supervisor_shift_id,
+    ).order_by(Evaluation.rep_start).all()
+
+    fines = Fine.query.filter_by(
+        day=day, branch=branch,
+        supervisor_id=supervisor_id,
+        supervisor_shift_id=supervisor_shift_id,
+    ).order_by(Fine.created_at).all()
+
+    branch_label = D.BRANCHES.get(branch, {}).get("label", branch)
+    shift = D.get_supervisor_shift(supervisor_shift_id)
+    shift_label = shift["label"] if shift else supervisor_shift_id
+    sup_name = evals[0].supervisor_name if evals else (fines[0].supervisor_name if fines else "")
+    subtitle = f"الفرع: {branch_label}   |   المشرف: {sup_name}   |   الشيفت: {shift_label}   |   اليوم: {day}"
+
+    wb = Workbook()
+
+    # ---------------- Sheet 1: التقييمات ----------------
+    ws = wb.active
+    ws.title = "التقييمات"
+    headers = ["#", "المندوب", "النوع", "بداية الشيفت", "الحضور", "السبب", "الأوردرات", "MISS", "الأداء"]
+    ncols = len(headers)
+    _sheet_header(ws, "BANKAI - تقرير تقييم المندوبين", subtitle, ncols)
+
+    header_row = 4
+    _write_table_header(ws, header_row, headers)
+
+    att_map = {"present": "حضر", "late": "تأخير", "absent": "غياب"}
+    reason_map = {"with": "بسبب", "without": "بدون سبب"}
+    fill_map = {"present": ROW_FILL_PRESENT, "late": ROW_FILL_LATE, "absent": ROW_FILL_ABSENT}
+
+    r = header_row + 1
+    for idx, e in enumerate(evals, start=1):
+        max_orders = 60
+        perf = f"{min(round((e.orders / max_orders) * 100), 100)}%" if max_orders else "-"
+        values = [
+            idx, e.rep_name,
+            "دوام كامل" if e.rep_type == "full" else "دوام جزئي",
+            f"{e.rep_start}:00",
+            att_map.get(e.attendance, "-"),
+            reason_map.get(e.reason, "-"),
+            e.orders, e.miss, perf,
+        ]
+        row_fill = fill_map.get(e.attendance) or (ROW_FILL_EVEN if idx % 2 == 0 else None)
+        for ci, v in enumerate(values, start=1):
+            c = ws.cell(row=r, column=ci, value=v)
+            c.border = CELL_BORDER
+            c.alignment = CENTER if ci != 2 else LEFT
+            c.font = Font(name="Calibri", size=11)
+            if row_fill:
+                c.fill = row_fill
+        r += 1
+
+    if evals:
+        total_row = r
+        ws.cell(row=total_row, column=1, value="الإجمالي").font = Font(bold=True)
+        ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=6)
+        ws.cell(row=total_row, column=1).alignment = Alignment(horizontal="right", vertical="center")
+        c_orders = ws.cell(row=total_row, column=7, value=f"=SUM(G{header_row+1}:G{r-1})")
+        c_miss = ws.cell(row=total_row, column=8, value=f"=SUM(H{header_row+1}:H{r-1})")
+        for c in (ws.cell(row=total_row, column=1), c_orders, c_miss, ws.cell(row=total_row, column=9)):
+            c.font = Font(bold=True)
+            c.border = CELL_BORDER
+            c.fill = PatternFill("solid", fgColor="E2E8F0")
+            c.alignment = CENTER
+
+    col_widths = [5, 26, 12, 14, 10, 12, 12, 10, 10]
+    for i, w in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    ws.freeze_panes = f"A{header_row+1}"
+
+    if not evals:
+        ws.cell(row=header_row + 1, column=1, value="لا توجد تقييمات محفوظة لهذا الشيفت")
+        ws.merge_cells(start_row=header_row+1, start_column=1, end_row=header_row+1, end_column=ncols)
+        ws.cell(row=header_row+1, column=1).alignment = CENTER
+
+    # ---------------- Sheet 2: الغرامات ----------------
+    ws2 = wb.create_sheet("الغرامات")
+    headers2 = ["#", "المندوب", "المبلغ (جنيه)", "السبب"]
+    ncols2 = len(headers2)
+    _sheet_header(ws2, "BANKAI - تقرير الغرامات", subtitle, ncols2)
+
+    header_row2 = 4
+    _write_table_header(ws2, header_row2, headers2)
+
+    r2 = header_row2 + 1
+    for idx, f in enumerate(fines, start=1):
+        values = [idx, f.rep_name, f.amount, f.reason or "-"]
+        row_fill = FINE_FILL if idx % 2 == 1 else None
+        for ci, v in enumerate(values, start=1):
+            c = ws2.cell(row=r2, column=ci, value=v)
+            c.border = CELL_BORDER
+            c.alignment = CENTER if ci != 4 else LEFT
+            c.font = Font(name="Calibri", size=11)
+            if ci == 3:
+                c.number_format = "#,##0.00"
+            if row_fill:
+                c.fill = row_fill
+        r2 += 1
+
+    if fines:
+        total_row2 = r2
+        ws2.cell(row=total_row2, column=1, value="إجمالي الغرامات").font = Font(bold=True)
+        ws2.merge_cells(start_row=total_row2, start_column=1, end_row=total_row2, end_column=2)
+        ws2.cell(row=total_row2, column=1).alignment = Alignment(horizontal="right", vertical="center")
+        c_total = ws2.cell(row=total_row2, column=3, value=f"=SUM(C{header_row2+1}:C{r2-1})")
+        c_total.number_format = "#,##0.00"
+        for c in (ws2.cell(row=total_row2, column=1), c_total, ws2.cell(row=total_row2, column=4)):
+            c.font = Font(bold=True)
+            c.border = CELL_BORDER
+            c.fill = PatternFill("solid", fgColor="FCA5A5")
+            c.alignment = CENTER
+    else:
+        ws2.cell(row=header_row2 + 1, column=1, value="لا توجد غرامات مسجلة لهذا الشيفت")
+        ws2.merge_cells(start_row=header_row2+1, start_column=1, end_row=header_row2+1, end_column=ncols2)
+        ws2.cell(row=header_row2+1, column=1).alignment = CENTER
+
+    col_widths2 = [5, 28, 16, 40]
+    for i, w in enumerate(col_widths2, start=1):
+        ws2.column_dimensions[get_column_letter(i)].width = w
+    ws2.freeze_panes = f"A{header_row2+1}"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = f"bankai-{branch}-{supervisor_id}-{day}-{supervisor_shift_id}.xlsx"
+    return Response(
+        buf.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
+    )
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
