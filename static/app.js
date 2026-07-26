@@ -5,6 +5,7 @@ const App = (function () {
     let session = null;       // { branch, supervisor_id, supervisor_name, shift_id, day }
     let repsCache = [];       // آخر نتيجة من /api/reps
     let shiftClosed = false;
+    let activeType = 'full';  // 'full' | 'part' -- التاب النشط
 
     const avatarColors = ['#2563eb', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
@@ -15,12 +16,35 @@ const App = (function () {
         createParticles();
         setupRippleEffect();
         bindStaticEvents();
+        initTheme();
 
         const today = new Date();
         document.getElementById('daySelect').value = today.toISOString().split('T')[0];
 
         CONFIG = await fetchJSON('/api/branches');
         populateBranches();
+    }
+
+    // ============================================================
+    // Theme (light/dark)
+    // ============================================================
+    function initTheme() {
+        let saved = null;
+        try { saved = localStorage.getItem('bankai_theme'); } catch (e) {}
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (prefersDark ? 'dark' : 'light');
+        applyTheme(theme);
+        document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        try { localStorage.setItem('bankai_theme', theme); } catch (e) {}
+    }
+
+    function toggleTheme() {
+        const current = document.documentElement.getAttribute('data-theme') || 'light';
+        applyTheme(current === 'dark' ? 'light' : 'dark');
     }
 
     function populateBranches() {
@@ -49,6 +73,8 @@ const App = (function () {
         document.getElementById('exportBtn').addEventListener('click', exportData);
         document.getElementById('saveAllBtn').addEventListener('click', saveAll);
         document.getElementById('closeShiftBtn').addEventListener('click', closeShift);
+        document.getElementById('tabFull').addEventListener('click', () => switchTypeTab('full'));
+        document.getElementById('tabPart').addEventListener('click', () => switchTypeTab('part'));
         document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
         document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
@@ -197,9 +223,16 @@ const App = (function () {
         const table = document.getElementById('repsTable');
         const emptyState = document.getElementById('emptyState');
 
-        if (repsCache.length === 0) {
+        updateTypeTabCounts();
+
+        const filtered = repsCache.filter(r => r.type === activeType);
+
+        if (filtered.length === 0) {
             table.innerHTML = '';
             emptyState.style.display = 'block';
+            emptyState.textContent = repsCache.length === 0
+                ? 'لا يوجد مندوبين متقاطعين مع هذا الشيفت في هذا اليوم'
+                : `لا يوجد مندوبين ${activeType === 'full' ? 'دوام كامل' : 'دوام جزئي'} في هذا الشيفت`;
             return;
         }
         emptyState.style.display = 'none';
@@ -217,9 +250,24 @@ const App = (function () {
                 </tr>
             </thead>
             <tbody>
-                ${repsCache.map((rep, i) => renderRow(rep, i)).join('')}
+                ${filtered.map((rep, i) => renderRow(rep, i)).join('')}
             </tbody>
         `;
+    }
+
+    function updateTypeTabCounts() {
+        const fullCount = repsCache.filter(r => r.type === 'full').length;
+        const partCount = repsCache.filter(r => r.type === 'part').length;
+        document.getElementById('countFull').textContent = fullCount;
+        document.getElementById('countPart').textContent = partCount;
+    }
+
+    function switchTypeTab(type) {
+        if (type === activeType) return;
+        activeType = type;
+        document.getElementById('tabFull').classList.toggle('active', type === 'full');
+        document.getElementById('tabPart').classList.toggle('active', type === 'part');
+        renderTable();
     }
 
     function fmtHour(h) {
@@ -248,8 +296,13 @@ const App = (function () {
                         <div class="rep-avatar" style="background: linear-gradient(135deg, ${color}, ${color}cc);">${initials}</div>
                         <div class="rep-info-main">
                             <div class="rep-name">${rep.name}</div>
-                            <div class="rep-id">${rep.type === 'full' ? 'دوام كامل' : 'دوام جزئي'}</div>
-                            <div class="rep-shift-row">⏰ ${fmtHour(rep.start)} - ${fmtHour(rep.end_hour)}</div>
+                            <div class="rep-meta-row">
+                                <span class="type-badge ${rep.type === 'full' ? 'full' : 'part'}">${rep.type === 'full' ? 'دوام كامل' : 'دوام جزئي'}</span>
+                                <span class="rep-shift-row">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                    ${fmtHour(rep.start)} - ${fmtHour(rep.end_hour)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </td>
