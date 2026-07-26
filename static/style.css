@@ -721,3 +721,178 @@ input.form-select { cursor: text; appearance: auto; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ============================================================
+   TYPE BADGE + SHIFT TIME (rep row meta)
+   ============================================================ */
+.rep-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 3px;
+}
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.type-badge.full {
+    background: var(--success-light);
+    color: #047857;
+}
+.type-badge.part {
+    background: var(--warning-light);
+    color: #b45309;
+}
+.rep-shift-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-700);
+    background: var(--gray-100);
+    padding: 3px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+    font-family: 'Inter', 'Tajawal', sans-serif;
+    letter-spacing: 0.2px;
+}
+.rep-shift-row svg { flex-shrink: 0; opacity: 0.75; }
+
+/* ============================================================
+   TYPE TABS (فول تايم / بارت تايم)
+   ============================================================ */
+.type-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    animation: slideUp 0.6s 0.65s both cubic-bezier(0.16, 1, 0.3, 1);
+}
+.type-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 1.5px solid var(--gray-200);
+    background: var(--surface, #fff);
+    color: var(--gray-500);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.type-tab:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+    transform: translateY(-1px);
+}
+.type-tab.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+}
+.type-tab-count {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 800;
+    min-width: 20px;
+    text-align: center;
+}
+.type-tab.active .type-tab-count { background: rgba(255,255,255,0.25); }
+
+/* ============================================================
+   THEME TOGGLE BUTTON
+   ============================================================ */
+.theme-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1.5px solid var(--gray-200);
+    background: var(--surface, #fff);
+    color: var(--gray-700);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+}
+.theme-toggle-btn:hover {
+    border-color: var(--primary-light);
+    color: var(--primary);
+    transform: rotate(15deg);
+}
+.theme-toggle-btn .icon-moon { display: none; }
+.theme-toggle-btn .icon-sun { display: block; }
+[data-theme="dark"] .theme-toggle-btn .icon-sun { display: none; }
+[data-theme="dark"] .theme-toggle-btn .icon-moon { display: block; }
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+[data-theme="dark"] {
+    --surface: #1e293b;
+}
+[data-theme="dark"] body {
+    background: #0b1120;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .navbar,
+[data-theme="dark"] .reps-table-wrapper,
+[data-theme="dark"] .stat-mini,
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .filter-select,
+[data-theme="dark"] .type-tab,
+[data-theme="dark"] .theme-toggle-btn,
+[data-theme="dark"] .date-badge,
+[data-theme="dark"] .user-chip,
+[data-theme="dark"] .current-shift-banner {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .reps-table thead { background: #16213a; }
+[data-theme="dark"] .reps-table td { border-bottom-color: #2a3a52; color: #e2e8f0; }
+[data-theme="dark"] .reps-table tbody tr:hover { background: #24314a; }
+[data-theme="dark"] .reps-table tbody tr.saved { background: linear-gradient(90deg, #0f2e1f, #123826); }
+[data-theme="dark"] .reps-table tbody tr.saved:hover { background: linear-gradient(90deg, #123826, #16452f); }
+[data-theme="dark"] .rep-name { color: #f1f5f9; }
+[data-theme="dark"] .rep-id { color: #94a3b8; }
+[data-theme="dark"] .rep-shift-row { background: #2a3a52; color: #cbd5e1; }
+[data-theme="dark"] .type-badge.full { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+[data-theme="dark"] .type-badge.part { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+[data-theme="dark"] .nav-title,
+[data-theme="dark"] .stat-mini-value,
+[data-theme="dark"] .modal-title { color: #f1f5f9; }
+[data-theme="dark"] .nav-subtitle,
+[data-theme="dark"] .stat-mini-label,
+[data-theme="dark"] .modal-desc { color: #94a3b8; }
+[data-theme="dark"] .search-input { color: #e2e8f0; }
+[data-theme="dark"] .search-input::placeholder { color: #64748b; }
+[data-theme="dark"] .filter-select { color: #e2e8f0; }
+[data-theme="dark"] .empty-state { color: #64748b; }
+[data-theme="dark"] .type-tab:not(.active):hover { background: #24314a !important; }
+[data-theme="dark"] .modal-box { background: #1e293b; }
+[data-theme="dark"] .toast { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+[data-theme="dark"] .stepper { background: #16213a; border-color: #334155; }
+[data-theme="dark"] .stepper-input { color: #e2e8f0; background: transparent; }
+[data-theme="dark"] .progress-bar { background: #334155; }
+[data-theme="dark"] .att-chip { border-color: #334155; color: #cbd5e1; }
+[data-theme="dark"] .icon-btn { border-color: #334155; color: #cbd5e1; }
+[data-theme="dark"] .login-form-section { background: #1e293b; color: #e2e8f0; }
+[data-theme="dark"] .login-header h1 { color: #f1f5f9; }
+[data-theme="dark"] .login-header p { color: #94a3b8; }
+[data-theme="dark"] .form-select { background: #16213a; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .form-label { color: #cbd5e1; }
