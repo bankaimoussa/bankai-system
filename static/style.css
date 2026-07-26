@@ -1072,3 +1072,120 @@ input.form-select { cursor: text; appearance: auto; }
 [data-theme="dark"] .fines-form input.form-select { background: var(--surface); border-color: var(--gray-200); color: var(--gray-900); }
 [data-theme="dark"] .fines-total-bar { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
 [data-theme="dark"] .fine-amount { color: var(--danger); }
+
+/* ============================================================
+   STAT CARDS — refined look (border accent + depth)
+   ============================================================ */
+.stat-mini {
+    border-radius: 16px;
+    border-width: 1px;
+    position: relative;
+    padding: 16px 18px;
+}
+.stat-mini::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    top: 10px; bottom: 10px;
+    width: 4px;
+    border-radius: 4px;
+    background: var(--gray-200);
+    transition: background 0.3s;
+}
+.stat-mini:nth-child(1)::after { background: linear-gradient(180deg, var(--primary), var(--primary-light)); }
+.stat-mini:nth-child(2)::after { background: linear-gradient(180deg, var(--success), #34d399); }
+.stat-mini:nth-child(3)::after { background: linear-gradient(180deg, var(--warning), #fbbf24); }
+.stat-mini:nth-child(4)::after { background: linear-gradient(180deg, var(--danger), #f87171); }
+.stat-mini-icon {
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.stat-mini:hover { box-shadow: 0 14px 32px -12px rgba(15, 23, 42, 0.18); }
+[data-theme="dark"] .stat-mini:hover { box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.5); }
+
+/* ============================================================
+   TYPE TABS — pill group with sliding-feel active state
+   ============================================================ */
+.type-tabs {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    padding: 6px;
+    border-radius: 16px;
+    display: inline-flex;
+    gap: 4px;
+    width: fit-content;
+}
+.type-tab {
+    border: none;
+    border-radius: 11px;
+    padding: 9px 18px;
+    box-shadow: none;
+}
+.type-tab:hover:not(.active) {
+    background: rgba(37, 99, 235, 0.08);
+    transform: none;
+}
+.type-tab.active {
+    transform: translateY(0);
+}
+[data-theme="dark"] .type-tabs { background: var(--page-bg); border-color: var(--gray-200); }
+[data-theme="dark"] .type-tab:hover:not(.active) { background: rgba(59, 130, 246, 0.1) !important; }
+
+/* ============================================================
+   ADD REP BUTTON accent
+   ============================================================ */
+#addRepBtn { border-color: var(--primary-light); color: var(--primary); }
+#addRepBtn:hover { background: rgba(37, 99, 235, 0.08); }
+[data-theme="dark"] #addRepBtn { color: var(--primary-light); border-color: var(--primary); }
+[data-theme="dark"] #addRepBtn:hover { background: rgba(59, 130, 246, 0.12) !important; }
+
+/* ============================================================
+   FINES SEARCH ROW
+   ============================================================ */
+.fines-search-row { margin-bottom: 14px; }
+.fines-search-row .search-box { max-width: 320px; }
+
+/* ============================================================
+   ADD REP MODAL
+   ============================================================ */
+.wide-modal { max-width: 460px; text-align: right; }
+.add-rep-form { display: flex; flex-direction: column; gap: 14px; margin: 20px 0; text-align: right; }
+.add-rep-form .form-group { margin: 0; }
+.add-rep-form .fines-form-row { margin: 0; }
+
+.segmented-control {
+    display: flex;
+    background: var(--gray-100);
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+}
+.segmented-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--gray-500);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.segmented-btn.active {
+    background: white;
+    color: var(--primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+[data-theme="dark"] .segmented-control { background: var(--page-bg); }
+[data-theme="dark"] .segmented-btn { color: var(--gray-500); }
+[data-theme="dark"] .segmented-btn.active { background: var(--surface-alt); color: var(--primary-light); }
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    position: relative;
+}
+.modal-actions .action-btn { flex: 1; justify-content: center; }
