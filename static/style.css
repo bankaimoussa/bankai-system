@@ -998,3 +998,77 @@ input.form-select { cursor: text; appearance: auto; }
 /* Buttons that were pure white/dark literal */
 [data-theme="dark"] .btn-danger { background: rgba(248, 113, 113, 0.15); border: 1px solid var(--danger); color: var(--danger); }
 [data-theme="dark"] .btn-danger:hover { background: rgba(248, 113, 113, 0.25); }
+
+/* ============================================================
+   FINES TAB & PANEL
+   ============================================================ */
+.type-tab.tab-fines.active {
+    background: linear-gradient(135deg, var(--danger), #dc2626);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
+.fines-panel { padding: 20px; }
+
+.fines-form {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+.fines-form-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.fines-form-row:last-child { margin-bottom: 0; }
+.fines-form .form-group { flex: 1; min-width: 180px; margin: 0; }
+.fines-form .fine-amount-group { max-width: 200px; }
+.form-label-mini {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-700);
+    margin-bottom: 6px;
+}
+.fines-form select.form-select,
+.fines-form input.form-select {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--gray-200);
+    background: white;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--gray-900);
+}
+.fines-form select.form-select:focus,
+.fines-form input.form-select:focus {
+    outline: none;
+    border-color: var(--danger);
+}
+#addFineBtn { background: linear-gradient(135deg, var(--danger), #dc2626); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); white-space: nowrap; }
+
+.fine-amount { font-weight: 800; color: var(--danger); font-family: 'Inter', sans-serif; }
+
+.fines-total-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    margin-top: 4px;
+    background: var(--danger-light);
+    border-radius: 10px;
+    font-weight: 700;
+    color: #991b1b;
+}
+.fines-total-value { font-size: 18px; font-weight: 800; font-family: 'Inter', sans-serif; }
+
+[data-theme="dark"] .fines-form { background: var(--surface-alt); border-color: var(--gray-200); }
+[data-theme="dark"] .form-label-mini { color: var(--gray-700); }
+[data-theme="dark"] .fines-form select.form-select,
+[data-theme="dark"] .fines-form input.form-select { background: var(--surface); border-color: var(--gray-200); color: var(--gray-900); }
+[data-theme="dark"] .fines-total-bar { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+[data-theme="dark"] .fine-amount { color: var(--danger); }
