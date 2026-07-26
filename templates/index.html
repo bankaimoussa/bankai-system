@@ -248,10 +248,43 @@
                 دوام جزئي
                 <span class="type-tab-count" id="countPart">0</span>
             </button>
+            <button class="type-tab tab-fines" id="tabFines" data-type="fines">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                الغرامات
+                <span class="type-tab-count" id="countFines">0</span>
+            </button>
         </div>
 
         <div class="reps-table-wrapper">
             <table class="reps-table" id="repsTable"></table>
+
+            <div class="fines-panel" id="finesPanel" style="display:none;">
+                <div class="fines-form">
+                    <div class="fines-form-row">
+                        <div class="form-group">
+                            <label class="form-label-mini">المندوب</label>
+                            <select class="form-select" id="fineRepSelect">
+                                <option value="">-- اختر المندوب --</option>
+                            </select>
+                        </div>
+                        <div class="form-group fine-amount-group">
+                            <label class="form-label-mini">المبلغ (جنيه)</label>
+                            <input type="number" class="form-select" id="fineAmountInput" min="0" step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="fines-form-row">
+                        <div class="form-group" style="flex:1;">
+                            <label class="form-label-mini">سبب الغرامة</label>
+                            <input type="text" class="form-select" id="fineReasonInput" placeholder="مثال: تأخير في التسليم">
+                        </div>
+                        <button class="action-btn btn-primary" id="addFineBtn" style="align-self:flex-end;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            إضافة غرامة
+                        </button>
+                    </div>
+                </div>
+                <div id="finesTableWrap"></div>
+            </div>
         </div>
         <div class="empty-state" id="emptyState" style="display:none;">
             لا يوجد مندوبين متقاطعين مع هذا الشيفت في هذا اليوم
