@@ -85,3 +85,38 @@ class ShiftSession(db.Model):
             name="uq_session_key",
         ),
     )
+
+
+class Fine(db.Model):
+    """
+    غرامة مالية على مندوب: قيمة بالجنيه + سبب، مرتبطة بيوم/فرع/مشرف/شيفت المشرف
+    اللي سجلها (نفس منطق التقييمات) عشان تظهر وتتصدّر مع باقي بيانات الشيفت.
+    """
+    __tablename__ = "fines"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    day = db.Column(db.String(10), nullable=False, index=True)
+    branch = db.Column(db.String(20), nullable=False, index=True)
+    supervisor_id = db.Column(db.String(20), nullable=False, index=True)
+    supervisor_name = db.Column(db.String(120), nullable=False)
+    supervisor_shift_id = db.Column(db.String(20), nullable=False, index=True)
+
+    rep_name = db.Column(db.String(200), nullable=False, index=True)
+    amount = db.Column(db.Float, nullable=False, default=0)
+    reason = db.Column(db.String(300), nullable=False, default="")
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "day": self.day,
+            "branch": self.branch,
+            "supervisor_id": self.supervisor_id,
+            "supervisor_name": self.supervisor_name,
+            "supervisor_shift_id": self.supervisor_shift_id,
+            "rep_name": self.rep_name,
+            "amount": self.amount,
+            "reason": self.reason,
+        }
