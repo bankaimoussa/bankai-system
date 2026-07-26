@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from models import db, Evaluation, ShiftSession, Fine
+from models import db, Evaluation, ShiftSession, Fine, Rep
 import data as D
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -49,6 +49,61 @@ def api_branches():
 
 
 # ============================================================
+# Reps management (إضافة مندوبين من الواجهة)
+# ============================================================
+@app.route("/api/manage_reps")
+def api_manage_reps_list():
+    branch = request.args.get("branch", "")
+    q = Rep.query.filter_by(active=True)
+    if branch:
+        q = q.filter_by(branch=branch)
+    reps = q.order_by(Rep.created_at.desc()).all()
+    return jsonify({"reps": [r.to_dict() for r in reps]})
+
+
+@app.route("/api/manage_reps", methods=["POST"])
+def api_manage_reps_add():
+    payload = request.get_json(force=True) or {}
+    required = ["name", "branch", "rep_type", "start", "end"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"error": f"missing: {missing}"}), 400
+
+    name = str(payload["name"]).strip()
+    branch = payload["branch"]
+    rep_type = payload["rep_type"]
+    email = (payload.get("email") or "").strip() or None
+
+    if not name:
+        return jsonify({"error": "invalid_name"}), 400
+    if branch not in D.BRANCHES:
+        return jsonify({"error": "invalid_branch"}), 400
+    if rep_type not in ("full", "part"):
+        return jsonify({"error": "invalid_type"}), 400
+    try:
+        start = int(payload["start"])
+        end = int(payload["end"])
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_hours"}), 400
+    if not (0 <= start <= 23) or not (0 <= end <= 23):
+        return jsonify({"error": "invalid_hours"}), 400
+
+    rep = Rep(name=name, email=email, branch=branch, rep_type=rep_type, start=start, end=end)
+    db.session.add(rep)
+    db.session.commit()
+    return jsonify({"ok": True, "rep": rep.to_dict()})
+
+
+@app.route("/api/manage_reps/<int:rep_id>", methods=["DELETE"])
+def api_manage_reps_delete(rep_id):
+    rep = Rep.query.get(rep_id)
+    if rep:
+        rep.active = False
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ============================================================
 # Reps overlapping a supervisor's shift, merged with saved evaluations
 # ============================================================
 @app.route("/api/reps")
@@ -61,7 +116,10 @@ def api_reps():
     if not all([branch, supervisor_id, supervisor_shift_id, day]):
         return jsonify({"error": "missing params"}), 400
 
-    reps = D.get_overlapping_reps(branch, supervisor_shift_id)
+    reps = D.get_overlapping_reps(
+        branch, supervisor_shift_id,
+        extra_reps=[r.to_rep_dict() for r in Rep.query.filter_by(branch=branch, active=True).all()],
+    )
 
     # هات التقييمات المحفوظة لنفس (اليوم/الفرع/المشرف/شيفته)
     evals = Evaluation.query.filter_by(
