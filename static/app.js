@@ -15,15 +15,8 @@ const App = (function () {
     // ============================================================
     // rep name -> { status: 'idle'|'pending'|'uploaded'|'failed', request_uid, suggested_orders, pollTimer }
     const cortexState = {};
-    const CORTEX_CHANNEL_NAME = 'bankai_cortex';
     const CORTEX_POLL_INTERVAL_MS = 2000;
     const CORTEX_POLL_TIMEOUT_MS = 60000; // نستنى دقيقة، بعدها نعتبره فشل صامت
-    let cortexChannel = null;
-    try {
-        cortexChannel = new BroadcastChannel(CORTEX_CHANNEL_NAME);
-    } catch (e) {
-        cortexChannel = null; // متصفح قديم مش بيدعم BroadcastChannel
-    }
 
     // ============================================================
     // Init
@@ -538,11 +531,6 @@ const App = (function () {
         const rep = findRep(name);
         if (!rep) return;
 
-        if (!cortexChannel) {
-            showToast('خطأ', 'المتصفح ده مش بيدعم Cortex', 'error');
-            return;
-        }
-
         clearCortexPoll(name);
         cortexState[name] = { status: 'pending' };
         renderTable();
@@ -568,11 +556,8 @@ const App = (function () {
         const req = resp.request;
         cortexState[name].request_uid = req.request_uid;
 
-        // إشارة للاسكريبت في تاب Amazon Logistics عبر BroadcastChannel
-        cortexChannel.postMessage({
-            request_uid: req.request_uid,
-            short_name: req.short_name,
-        });
+        // الاسكريبت في تاب Amazon Logistics بيعمل polling على BANKAI لوحده
+        // ويسحب الطلب ده (/api/cortex/claim)، فمش محتاجين نبعتله إشارة هنا.
 
         pollCortexStatus(name, req.request_uid, Date.now());
     }
