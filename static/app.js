@@ -56,7 +56,7 @@ const App = (function () {
         document.getElementById('branchSelect').value = saved.branch;
         onBranchChange();
         document.getElementById('supervisorSelect').value = saved.supervisor_id;
-        document.getElementById('shiftSelect').value = saved.shift_id;
+        onSupervisorChange();
         document.getElementById('daySelect').value = saved.day;
 
         document.getElementById('userName').textContent = sup.name;
@@ -101,12 +101,6 @@ const App = (function () {
             sel.innerHTML += `<option value="${id}">📍 ${b.label}</option>`;
         });
 
-        const shiftSel = document.getElementById('shiftSelect');
-        shiftSel.innerHTML = '<option value="">-- اختر الشيفت --</option>';
-        CONFIG.supervisor_shifts.forEach(s => {
-            shiftSel.innerHTML += `<option value="${s.id}">🕐 ${s.label}</option>`;
-        });
-
         const newRepBranch = document.getElementById('newRepBranch');
         newRepBranch.innerHTML = '<option value="">-- اختر الفرع --</option>';
         Object.entries(CONFIG.branches).forEach(([id, b]) => {
@@ -128,8 +122,7 @@ const App = (function () {
 
     function bindStaticEvents() {
         document.getElementById('branchSelect').addEventListener('change', onBranchChange);
-        document.getElementById('supervisorSelect').addEventListener('change', validateLoginForm);
-        document.getElementById('shiftSelect').addEventListener('change', validateLoginForm);
+        document.getElementById('supervisorSelect').addEventListener('change', onSupervisorChange);
         document.getElementById('daySelect').addEventListener('change', validateLoginForm);
         document.getElementById('loginBtn').addEventListener('click', login);
 
@@ -171,15 +164,39 @@ const App = (function () {
         } else {
             supSelect.disabled = true;
         }
+        showAutoShift('');
         validateLoginForm();
+    }
+
+    function onSupervisorChange() {
+        const branch = document.getElementById('branchSelect').value;
+        const supId = document.getElementById('supervisorSelect').value;
+        const sup = branch && supId ? CONFIG.branches[branch].supervisors.find(s => s.id === supId) : null;
+        if (sup) {
+            const shift = CONFIG.supervisor_shifts.find(s => s.id === sup.shift_id);
+            showAutoShift(shift ? shift.label : '');
+        } else {
+            showAutoShift('');
+        }
+        validateLoginForm();
+    }
+
+    function showAutoShift(label) {
+        const box = document.getElementById('autoShiftDisplay');
+        if (!box) return;
+        if (label) {
+            box.style.display = 'flex';
+            box.querySelector('.auto-shift-value').textContent = label;
+        } else {
+            box.style.display = 'none';
+        }
     }
 
     function validateLoginForm() {
         const branch = document.getElementById('branchSelect').value;
         const sup = document.getElementById('supervisorSelect').value;
-        const shift = document.getElementById('shiftSelect').value;
         const day = document.getElementById('daySelect').value;
-        document.getElementById('loginBtn').disabled = !(branch && sup && shift && day);
+        document.getElementById('loginBtn').disabled = !(branch && sup && day);
     }
 
     // ============================================================
@@ -188,15 +205,15 @@ const App = (function () {
     async function login() {
         const branch = document.getElementById('branchSelect').value;
         const supId = document.getElementById('supervisorSelect').value;
-        const shiftId = document.getElementById('shiftSelect').value;
         const day = document.getElementById('daySelect').value;
 
-        if (!branch || !supId || !shiftId || !day) {
+        if (!branch || !supId || !day) {
             showToast('خطأ', 'يرجى استكمال كل الحقول', 'error');
             return;
         }
 
         const sup = CONFIG.branches[branch].supervisors.find(s => s.id === supId);
+        const shiftId = sup.shift_id;
         const shift = CONFIG.supervisor_shifts.find(s => s.id === shiftId);
 
         session = {
@@ -254,7 +271,7 @@ const App = (function () {
             document.getElementById('branchSelect').value = '';
             document.getElementById('supervisorSelect').innerHTML = '<option value="">-- اختر الفرع أولاً --</option>';
             document.getElementById('supervisorSelect').disabled = true;
-            document.getElementById('shiftSelect').value = '';
+            showAutoShift('');
             document.getElementById('loginBtn').disabled = true;
             session = null;
             clearSessionFromStorage();
