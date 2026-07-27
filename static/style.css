@@ -1338,3 +1338,25 @@ input.form-select { cursor: text; appearance: auto; }
 [data-theme="dark"] .search-box:focus-within svg { color: #60a5fa; }
 [data-theme="dark"] .search-input:focus { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important; }
 [data-theme="dark"] .filter-select:hover { border-color: #3b82f6 !important; }
+
+/* ---------- Cortex ---------- */
+.cortex-btn {
+    width: auto; padding: 0 10px; height: 30px; font-size: 11px; font-weight: 700;
+    border-radius: 8px; margin-top: 6px; white-space: nowrap; gap: 4px;
+    color: var(--primary); border-color: var(--primary);
+}
+.cortex-btn:hover { background: var(--primary); color: white; }
+
+.cortex-status {
+    margin-top: 6px; font-size: 11px; font-weight: 600; display: flex; align-items: center;
+    justify-content: center; gap: 6px; flex-wrap: wrap;
+}
+.cortex-status.pending { color: var(--gray-500); }
+.cortex-status.failed { color: var(--danger); }
+.cortex-status.suggested { color: var(--success); }
+.cortex-status .icon-btn { width: 24px; height: 24px; border-radius: 6px; }
+.cortex-status.suggested .cortex-accept:hover { background: var(--success); color: white; border-color: var(--success); }
+.cortex-status.suggested .cortex-dismiss:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+[data-theme="dark"] .cortex-btn { color: #60a5fa; border-color: #60a5fa; }
+[data-theme="dark"] .cortex-btn:hover { background: #60a5fa; color: #0f172a; }
