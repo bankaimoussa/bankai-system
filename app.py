@@ -1,17 +1,20 @@
 # -*- coding: utf-8 -*-
 import os
 import io
+import uuid
 from datetime import datetime, date
 
 from flask import Flask, request, jsonify, render_template, Response
+from flask_cors import CORS
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from models import db, Evaluation, ShiftSession, Fine, Rep
+from models import db, Evaluation, ShiftSession, Fine, Rep, CortexRequest
 import data as D
+import cortex as C
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -22,6 +25,15 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db.init_app(app)
+
+# CORS مفعّل بس على مسارات /api/cortex/*، عشان الـ Tampermonkey script
+# (شغال على logistics.amazon.eg) يقدر يرفع الملف مباشرة من هناك.
+# باقي الـ API متعمدين نسيبه من غير CORS.
+CORS(
+    app,
+    resources={r"/api/cortex/*": {"origins": "https://logistics.amazon.eg"}},
+)
+
 
 def get_supervisor(branch, supervisor_id):
     """يرجع بيانات المشرف (بما فيها shift_id الثابت بتاعه) أو None."""
@@ -166,6 +178,122 @@ def api_reps():
         "reps": out,
         "shift_closed": session is not None,
     })
+
+
+# ============================================================
+# Cortex — جلب بيانات مندوب أوتوماتيك من Amazon Logistics
+# ============================================================
+@app.route("/api/cortex/request", methods=["POST"])
+def api_cortex_request():
+    """المشرف داس زرار Cortex -> بنسجل طلب جديد ونرجّع request_uid.
+    الفرونت إند بيبعت الـ request_uid + short_name للاسكريبت عبر BroadcastChannel."""
+    payload = request.get_json(force=True) or {}
+    required = ["branch", "supervisor_id", "supervisor_shift_id", "day", "rep_name"]
+    missing = [k for k in required if k not in payload]
+    if missing:
+        return jsonify({"error": f"missing: {missing}"}), 400
+
+    req = CortexRequest(
+        request_uid=str(uuid.uuid4()),
+        day=payload["day"],
+        branch=payload["branch"],
+        supervisor_id=payload["supervisor_id"],
+        supervisor_shift_id=payload["supervisor_shift_id"],
+        rep_name=payload["rep_name"],
+        short_name=C.short_name(payload["rep_name"]),
+        status="pending",
+    )
+    db.session.add(req)
+    db.session.commit()
+
+    return jsonify({"ok": True, "request": req.to_dict()})
+
+
+@app.route("/api/cortex/upload", methods=["POST"])
+def api_cortex_upload():
+    """الاسكريبت بيرفع ملف الـ CSV هنا بعد ما يحمله من Amazon Logistics.
+    multipart/form-data: file=<csv>, request_uid=<uuid>."""
+    request_uid = request.form.get("request_uid", "")
+    if not request_uid:
+        return jsonify({"error": "missing_request_uid"}), 400
+
+    req = CortexRequest.query.filter_by(request_uid=request_uid).first()
+    if not req:
+        return jsonify({"error": "unknown_request"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "missing_file"}), 400
+
+    file_bytes = request.files["file"].read()
+
+    try:
+        suggested_orders, raw_row_count, unique_stop_count = C.count_orders_from_csv(file_bytes)
+    except ValueError as e:
+        req.status = "failed"
+        req.error_message = str(e)
+        db.session.commit()
+        return jsonify({"error": str(e)}), 422
+
+    req.status = "uploaded"
+    req.suggested_orders = suggested_orders
+    req.raw_row_count = raw_row_count
+    req.unique_stop_count = unique_stop_count
+    req.uploaded_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"ok": True, "request": req.to_dict()})
+
+
+@app.route("/api/cortex/status/<request_uid>")
+def api_cortex_status(request_uid):
+    """الفرونت إند بيعمل polling خفيف على ده لحد ما الطلب يبقى uploaded."""
+    req = CortexRequest.query.filter_by(request_uid=request_uid).first()
+    if not req:
+        return jsonify({"error": "unknown_request"}), 404
+    return jsonify({"ok": True, "request": req.to_dict()})
+
+
+@app.route("/api/cortex/apply", methods=["POST"])
+def api_cortex_apply():
+    """المشرف قبل الرقم المقترح -> بنحطه في orders بتاع الـ Evaluation
+    (بنعيد استخدام نفس شرط قفل الشيفت اللي في /api/evaluate)."""
+    payload = request.get_json(force=True) or {}
+    request_uid = payload.get("request_uid", "")
+    req = CortexRequest.query.filter_by(request_uid=request_uid).first()
+    if not req:
+        return jsonify({"error": "unknown_request"}), 404
+    if req.status != "uploaded" or req.suggested_orders is None:
+        return jsonify({"error": "not_ready"}), 409
+
+    session = ShiftSession.query.filter_by(
+        day=req.day, branch=req.branch,
+        supervisor_id=req.supervisor_id,
+        supervisor_shift_id=req.supervisor_shift_id,
+    ).first()
+    if session:
+        return jsonify({"error": "shift_closed"}), 409
+
+    orders_value = payload.get("orders", req.suggested_orders)
+    try:
+        orders_value = max(0, int(orders_value))
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_orders"}), 400
+
+    ev = Evaluation.query.filter_by(
+        day=req.day, branch=req.branch,
+        supervisor_id=req.supervisor_id,
+        supervisor_shift_id=req.supervisor_shift_id,
+        rep_name=req.rep_name,
+    ).first()
+    if not ev:
+        return jsonify({"error": "evaluation_not_found"}), 404
+
+    ev.orders = orders_value
+    req.status = "applied"
+    req.applied_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"ok": True, "evaluation": ev.to_dict(), "request": req.to_dict()})
 
 
 # ============================================================
