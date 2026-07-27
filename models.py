@@ -162,8 +162,9 @@ class CortexRequest(db.Model):
     طلب "Cortex" لجلب بيانات مندوب أوتوماتيك من Amazon Logistics عبر
     الـ Tampermonkey script، وربط الملف اللي بيرجع بتقييم المندوب.
 
-    دورة الحياة: pending -> uploaded -> applied (أو failed).
+    دورة الحياة: pending -> claimed -> uploaded -> applied (أو failed).
     - pending: المشرف داس Cortex، لسه الاسكريبت ما جابش الملف.
+    - claimed: الاسكريبت سحب الطلب (polling) ولسه بيدور على السائق/يحمّل.
     - uploaded: الاسكريبت رفع CSV، اتفلتر واتحسب suggested_orders، مستني المشرف يأكد.
     - applied: المشرف قبل الرقم المقترح وانحفظ في orders بتاع الـ Evaluation.
     - failed: الاسكريبت مقدرش يجيب الملف (سبب في error_message).
