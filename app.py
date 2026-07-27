@@ -212,7 +212,7 @@ def api_cortex_request():
 @app.route("/api/cortex/claim", methods=["POST"])
 def api_cortex_claim():
     """الاسكريبت (شغال على logistics.amazon.eg) بيعمل polling على ده كل شوية.
-    بيرجع أقدم طلب pending واحد بس، وفي نفس اللحظة يحوّل حالته لـ in_progress
+    بيرجع أقدم طلب pending واحد بس، وفي نفس اللحظة يحوّل حالته لـ claimed
     عشان لو الاسكريبت طلب تاني قبل ما يخلص الأول، محدش ياخد نفس الطلب مرتين."""
     req = (
         CortexRequest.query.filter_by(status="pending")
@@ -222,7 +222,7 @@ def api_cortex_claim():
     if not req:
         return jsonify({"ok": True, "request": None})
 
-    req.status = "in_progress"
+    req.status = "claimed"
     db.session.commit()
 
     return jsonify({"ok": True, "request": {
