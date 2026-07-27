@@ -505,96 +505,70 @@ def api_fines_delete(fine_id):
 
 
 # ============================================================
-# Export -> ملف Excel منظم بشيتين: التقييمات + الغرامات
+# Export -> ملف Excel احترافي بشيتين: المندوبين + الغرامات
 # ============================================================
-HEADER_FILL = PatternFill("solid", fgColor="1E3A8A")
-HEADER_FONT = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
-TITLE_FONT = Font(name="Calibri", size=16, bold=True, color="1E3A8A")
-SUBTITLE_FONT = Font(name="Calibri", size=11, color="475569")
-THIN = Side(style="thin", color="CBD5E1")
-CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
-LEFT = Alignment(horizontal="right", vertical="center", wrap_text=True)
+# --- لوحة ألوان: كحلي/أزرق أساسي + أسود واضح للنصوص (بدون رمادي باهت) ---
+NAVY = "0B2447"          # كحلي غامق أساسي (هيدر الجدول + شريط الإجمالي)
+NAVY_DARK = "081A33"     # أغمق شوية للتباين بين الشيتين
+BLUE = "1D4ED8"          # أزرق أساسي للعناوين والتمييز
+BLUE_LIGHT = "DBEAFE"    # أزرق فاتح جدًا لخلفيات صفوف "دوام كامل"
+BLUE_LIGHT_2 = "EFF6FF"  # أزرق أفتح لصفوف "دوام جزئي"
+INK = "000000"           # أسود واضح لكل النصوص الأساسية
+INK_SOFT = "1A1A1A"      # أسود بدرجة قريبة جدًا (للنصوص الثانوية بدون رمادي)
+WHITE = "FFFFFF"
 
-ROW_FILL_EVEN = PatternFill("solid", fgColor="F1F5F9")
-ROW_FILL_PRESENT = PatternFill("solid", fgColor="DCFCE7")
-ROW_FILL_LATE = PatternFill("solid", fgColor="FEF3C7")
-ROW_FILL_ABSENT = PatternFill("solid", fgColor="FEE2E2")
-FINE_FILL = PatternFill("solid", fgColor="FEE2E2")
-
-
-def _sheet_header(ws, title, subtitle, ncols):
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
-    c = ws.cell(row=1, column=1, value=title)
-    c.font = TITLE_FONT
-    c.alignment = Alignment(horizontal="right", vertical="center")
-    ws.row_dimensions[1].height = 26
-
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
-    c2 = ws.cell(row=2, column=1, value=subtitle)
-    c2.font = SUBTITLE_FONT
-    c2.alignment = Alignment(horizontal="right", vertical="center")
-    ws.row_dimensions[2].height = 20
-    ws.sheet_view.rightToLeft = True
-
-
-def _write_table_header(ws, row, headers):
-    for i, h in enumerate(headers, start=1):
-        c = ws.cell(row=row, column=i, value=h)
-        c.font = HEADER_FONT
-        c.fill = HEADER_FILL
-        c.alignment = CENTER
-        c.border = CELL_BORDER
-    ws.row_dimensions[row].height = 22
-
-
-# ============================================================
-# Export -> ملف Excel بنفس منظر الشيت الأصلي (full/part + الاسم + start)
-# + الحضور + الأوردرات/MISS/الغرامات جنب كل مندوب
-# ============================================================
-NAVY = "1E293B"
-YELLOW = "FBBF24"
-PURPLE_DARK = "6C3FA8"
-PURPLE_MED = "9B59B6"
-PURPLE_ROW_A = "F3ECFA"
-PURPLE_ROW_B = "EDE1F8"
-PART_ROW_A = "F6EBFB"
-PART_ROW_B = "F0E0F9"
-
-GREEN = "16A34A"
+GREEN = "15803D"
 GREEN_LIGHT = "DCFCE7"
-AMBER = "D97706"
+AMBER = "B45309"
 AMBER_LIGHT = "FEF3C7"
-RED = "DC2626"
+RED = "B91C1C"
 RED_LIGHT = "FEE2E2"
-GRAY_LIGHT = "F1F5F9"
+NEUTRAL_LIGHT = "F2F2F2"   # بديل محايد فاتح جدًا (مش رمادي مزعج) لصف "لم يُسجل"
 
 HEADER_FILL = PatternFill("solid", fgColor=NAVY)
-HEADER_FONT = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-TITLE_FONT = Font(name="Calibri", size=17, bold=True, color=NAVY)
-SUBTITLE_FONT = Font(name="Calibri", size=11, color="64748B")
-THIN = Side(style="thin", color="CBD5E1")
+HEADER_FONT = Font(name="Calibri", size=11.5, bold=True, color=WHITE)
+TITLE_FONT = Font(name="Calibri", size=19, bold=True, color=NAVY)
+SUBTITLE_FONT = Font(name="Calibri", size=11, bold=True, color=INK_SOFT)
+BAND_FONT = Font(name="Calibri", size=10.5, bold=True, color=WHITE)
+
+THIN = Side(style="thin", color="000000")
+MED = Side(style="medium", color=NAVY)
 CELL_BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+OUTER_BORDER = Border(left=MED, right=MED, top=MED, bottom=MED)
 CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
 RIGHT_ALIGN = Alignment(horizontal="right", vertical="center", wrap_text=True)
 
 FINE_FILL = PatternFill("solid", fgColor=RED_LIGHT)
 
 
-def _sheet_header(ws, title, subtitle, ncols):
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
-    c = ws.cell(row=1, column=1, value=title)
-    c.font = TITLE_FONT
-    c.alignment = Alignment(horizontal="right", vertical="center")
-    ws.row_dimensions[1].height = 30
-
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
-    c2 = ws.cell(row=2, column=1, value=subtitle)
-    c2.font = SUBTITLE_FONT
-    c2.alignment = Alignment(horizontal="right", vertical="center")
-    ws.row_dimensions[2].height = 20
+def _sheet_header(ws, title, subtitle, ncols, icon_fill=NAVY):
+    """بانر عنوان احترافي: صف شعار/عنوان كحلي كامل العرض + صف سب تايتل."""
     ws.sheet_view.rightToLeft = True
     ws.sheet_view.showGridLines = False
+
+    # -- صف 1: شريط كحلي كامل بالعنوان بالأبيض (شكل هيدر شركة) --
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+    c = ws.cell(row=1, column=1, value=title)
+    c.font = Font(name="Calibri", size=18, bold=True, color=WHITE)
+    c.alignment = Alignment(horizontal="center", vertical="center")
+    c.fill = PatternFill("solid", fgColor=icon_fill)
+    ws.row_dimensions[1].height = 36
+    for col in range(1, ncols + 1):
+        ws.cell(row=1, column=col).fill = PatternFill("solid", fgColor=icon_fill)
+
+    # -- صف 2: خط أزرق رفيع فاصل (فاصل بصري بدل الرمادي) --
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=ncols)
+    ws.row_dimensions[2].height = 5
+    for col in range(1, ncols + 1):
+        ws.cell(row=2, column=col).fill = PatternFill("solid", fgColor=BLUE)
+
+    # -- صف 3: السب تايتل (تفاصيل الفرع/المشرف/الشيفت/اليوم) --
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=ncols)
+    c2 = ws.cell(row=3, column=1, value=subtitle)
+    c2.font = SUBTITLE_FONT
+    c2.alignment = Alignment(horizontal="center", vertical="center")
+    c2.fill = PatternFill("solid", fgColor=NEUTRAL_LIGHT)
+    ws.row_dimensions[3].height = 22
 
 
 def _write_table_header(ws, row, headers, fill=None, font=None):
@@ -604,7 +578,7 @@ def _write_table_header(ws, row, headers, fill=None, font=None):
         c.fill = fill or HEADER_FILL
         c.alignment = CENTER
         c.border = CELL_BORDER
-    ws.row_dimensions[row].height = 24
+    ws.row_dimensions[row].height = 26
 
 
 @app.route("/api/export_csv")
@@ -648,9 +622,9 @@ def api_export_csv():
     # ================= Sheet 1: المندوبين =================
     ws = wb.active
     ws.title = "المندوبين"
-    headers = ["نوع الدوام", "اسم المندوب", "بداية الشيفت", "الحضور", "الأوردرات", "MISS", "الغرامات (جنيه)"]
+    headers = ["#", "نوع الدوام", "اسم المندوب", "بداية الشيفت", "الحضور", "الأوردرات", "MISS", "الغرامات (جنيه)"]
     ncols = len(headers)
-    _sheet_header(ws, "🚚  BANKAI — جدول المندوبين", subtitle, ncols)
+    _sheet_header(ws, "BANKAI  —  جدول المندوبين", subtitle, ncols)
 
     header_row = 4
     _write_table_header(ws, header_row, headers)
@@ -660,9 +634,9 @@ def api_export_csv():
 
     att_map = {"present": "✓ حضر", "late": "⏱ تأخير", "absent": "✕ غياب"}
     att_colors = {
-        "present": (GREEN, GREEN_LIGHT),
-        "late": (AMBER, AMBER_LIGHT),
-        "absent": (RED, RED_LIGHT),
+        "present": (WHITE, GREEN),
+        "late": (WHITE, AMBER),
+        "absent": (WHITE, RED),
     }
 
     r = header_row + 1
@@ -683,71 +657,76 @@ def api_export_csv():
         elif attendance == "late": total_late += 1
         elif attendance == "absent": total_absent += 1
 
-        ws.row_dimensions[r].height = 20
+        ws.row_dimensions[r].height = 21
 
-        # عمود 1: بادچ نوع الدوام (dropdown)
-        c1 = ws.cell(row=r, column=1, value="full time" if is_full else "part time")
-        c1.font = Font(name="Calibri", size=10.5, bold=True, color="FFFFFF")
-        c1.fill = PatternFill("solid", fgColor=PURPLE_DARK if is_full else PURPLE_MED)
+        # خلفية الصف (تبادل بسيط أزرق فاتح جدًا / أبيض — واضح بدون رمادي)
+        row_fill = PatternFill("solid", fgColor=BLUE_LIGHT_2 if i % 2 == 0 else WHITE)
+
+        # عمود 1: ترقيم
+        c0 = ws.cell(row=r, column=1, value=i + 1)
+        c0.font = Font(name="Calibri", size=10.5, bold=True, color=INK)
+        c0.alignment = CENTER
+        c0.border = CELL_BORDER
+        c0.fill = row_fill
+
+        # عمود 2: بادچ نوع الدوام (dropdown)
+        c1 = ws.cell(row=r, column=2, value="full time" if is_full else "part time")
+        c1.font = Font(name="Calibri", size=10.5, bold=True, color=WHITE)
+        c1.fill = PatternFill("solid", fgColor=NAVY if is_full else BLUE)
         c1.alignment = CENTER
         c1.border = CELL_BORDER
         dv.add(c1)
 
-        # عمود 2: الاسم
-        c2 = ws.cell(row=r, column=2, value=rep["name"])
-        c2.font = Font(name="Calibri", size=11, bold=True, color="1E293B")
+        # عمود 3: الاسم
+        c2 = ws.cell(row=r, column=3, value=rep["name"])
+        c2.font = Font(name="Calibri", size=11.5, bold=True, color=INK)
         c2.alignment = RIGHT_ALIGN
         c2.border = CELL_BORDER
+        c2.fill = row_fill
 
-        # عمود 3: بداية الشيفت
+        # عمود 4: بداية الشيفت
         hr = rep['start'] % 24
         period = "ص" if hr < 12 else "م"
         hr12 = hr if 1 <= hr <= 12 else (12 if hr == 0 else hr - 12)
-        c3 = ws.cell(row=r, column=3, value=f"{hr12}:00 {period}")
-        c3.font = Font(name="Calibri", size=10.5, color="475569")
+        c3 = ws.cell(row=r, column=4, value=f"{hr12}:00 {period}")
+        c3.font = Font(name="Calibri", size=10.5, bold=True, color=INK)
         c3.alignment = CENTER
         c3.border = CELL_BORDER
+        c3.fill = row_fill
 
-        # عمود 4: الحضور
+        # عمود 5: الحضور (خلفية ملونة صريحة + نص أبيض واضح بدل نص باهت)
         if attendance:
             label = att_map.get(attendance, "-")
-            fg, bg = att_colors.get(attendance, ("475569", GRAY_LIGHT))
+            fg, bg = att_colors.get(attendance, (INK, NEUTRAL_LIGHT))
         else:
-            label, fg, bg = "— لم يُسجل —", "94A3B8", GRAY_LIGHT
-        c4 = ws.cell(row=r, column=4, value=label)
+            label, fg, bg = "— لم يُسجل —", INK, NEUTRAL_LIGHT
+        c4 = ws.cell(row=r, column=5, value=label)
         c4.font = Font(name="Calibri", size=10.5, bold=True, color=fg)
         c4.alignment = CENTER
         c4.border = CELL_BORDER
         c4.fill = PatternFill("solid", fgColor=bg)
 
-        # عمود 5: الأوردرات
-        c5 = ws.cell(row=r, column=5, value=orders)
+        # عمود 6: الأوردرات
+        c5 = ws.cell(row=r, column=6, value=orders)
         c5.alignment = CENTER
         c5.border = CELL_BORDER
-        c5.font = Font(name="Calibri", size=11, bold=orders > 0)
+        c5.font = Font(name="Calibri", size=11, bold=True, color=INK)
+        c5.fill = row_fill
 
-        # عمود 6: MISS
-        c6 = ws.cell(row=r, column=6, value=miss)
+        # عمود 7: MISS
+        c6 = ws.cell(row=r, column=7, value=miss)
         c6.alignment = CENTER
         c6.border = CELL_BORDER
-        c6.font = Font(name="Calibri", size=11, bold=miss > 0, color=RED if miss > 0 else "1E293B")
+        c6.font = Font(name="Calibri", size=11, bold=True, color=RED if miss > 0 else INK)
+        c6.fill = row_fill
 
-        # عمود 7: الغرامات
-        c7 = ws.cell(row=r, column=7, value=fine_total)
+        # عمود 8: الغرامات
+        c7 = ws.cell(row=r, column=8, value=fine_total)
         c7.alignment = CENTER
         c7.border = CELL_BORDER
         c7.number_format = '#,##0.00 "ج.م"'
-        c7.font = Font(name="Calibri", size=11, bold=fine_total > 0, color=RED if fine_total > 0 else "1E293B")
-        if fine_total > 0:
-            c7.fill = FINE_FILL
-
-        # خلفية الصف (تبادل حسب النوع)
-        if is_full:
-            row_fill = PatternFill("solid", fgColor=PURPLE_ROW_A if i % 2 == 0 else PURPLE_ROW_B)
-        else:
-            row_fill = PatternFill("solid", fgColor=PART_ROW_A if i % 2 == 0 else PART_ROW_B)
-        for c in (c2, c3, c5, c6):
-            c.fill = row_fill
+        c7.font = Font(name="Calibri", size=11, bold=True, color=RED if fine_total > 0 else INK)
+        c7.fill = FINE_FILL if fine_total > 0 else row_fill
 
         if is_full:
             full_count += 1
@@ -757,29 +736,30 @@ def api_export_csv():
 
     if reps_sorted:
         total_row = r
-        ws.row_dimensions[total_row].height = 24
-        label = f"الإجمالي  —  {full_count} دوام كامل  /  {part_count} دوام جزئي   |   حضر {total_present}  •  تأخير {total_late}  •  غياب {total_absent}"
-        ws.cell(row=total_row, column=1, value=label).font = Font(bold=True, size=10, color="FFFFFF")
-        ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=4)
+        ws.row_dimensions[total_row].height = 26
+        label = f"الإجمالي   —   {full_count} دوام كامل  /  {part_count} دوام جزئي     |     حضر {total_present}  •  تأخير {total_late}  •  غياب {total_absent}"
+        ws.cell(row=total_row, column=1, value=label).font = Font(bold=True, size=10.5, color=WHITE)
+        ws.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=5)
         ws.cell(row=total_row, column=1).alignment = Alignment(horizontal="right", vertical="center", indent=1)
-        ws.cell(row=total_row, column=1).fill = PatternFill("solid", fgColor=NAVY)
+        ws.cell(row=total_row, column=1).fill = PatternFill("solid", fgColor=NAVY_DARK)
 
-        c_orders = ws.cell(row=total_row, column=5, value=f"=SUM(E{header_row+1}:E{r-1})")
-        c_miss = ws.cell(row=total_row, column=6, value=f"=SUM(F{header_row+1}:F{r-1})")
-        c_fines = ws.cell(row=total_row, column=7, value=f"=SUM(G{header_row+1}:G{r-1})")
+        c_orders = ws.cell(row=total_row, column=6, value=f"=SUM(F{header_row+1}:F{r-1})")
+        c_miss = ws.cell(row=total_row, column=7, value=f"=SUM(G{header_row+1}:G{r-1})")
+        c_fines = ws.cell(row=total_row, column=8, value=f"=SUM(H{header_row+1}:H{r-1})")
         c_fines.number_format = '#,##0.00 "ج.م"'
         for c in (c_orders, c_miss, c_fines):
-            c.font = Font(bold=True, color="FFFFFF", size=11)
-            c.fill = PatternFill("solid", fgColor=NAVY)
+            c.font = Font(bold=True, color=WHITE, size=11)
+            c.fill = PatternFill("solid", fgColor=NAVY_DARK)
             c.alignment = CENTER
         for col in range(1, ncols + 1):
-            ws.cell(row=total_row, column=col).border = CELL_BORDER
+            ws.cell(row=total_row, column=col).border = OUTER_BORDER
     else:
         ws.cell(row=header_row + 1, column=1, value="لا يوجد مندوبين لهذا الشيفت")
         ws.merge_cells(start_row=header_row+1, start_column=1, end_row=header_row+1, end_column=ncols)
         ws.cell(row=header_row+1, column=1).alignment = CENTER
+        ws.cell(row=header_row+1, column=1).font = Font(bold=True, size=11, color=INK)
 
-    col_widths = [13, 30, 14, 14, 12, 8, 16]
+    col_widths = [6, 13, 30, 14, 14, 12, 8, 16]
     for i, w in enumerate(col_widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
     ws.freeze_panes = f"A{header_row+1}"
@@ -788,21 +768,21 @@ def api_export_csv():
     ws2 = wb.create_sheet("الغرامات")
     headers2 = ["#", "اسم المندوب", "المبلغ (جنيه)", "السبب"]
     ncols2 = len(headers2)
-    _sheet_header(ws2, "💰  BANKAI — تقرير الغرامات", subtitle, ncols2)
+    _sheet_header(ws2, "BANKAI  —  تقرير الغرامات", subtitle, ncols2, icon_fill=NAVY_DARK)
 
     header_row2 = 4
-    _write_table_header(ws2, header_row2, headers2)
+    _write_table_header(ws2, header_row2, headers2, fill=PatternFill("solid", fgColor=RED))
 
     r2 = header_row2 + 1
     for idx, f in enumerate(fines, start=1):
-        ws2.row_dimensions[r2].height = 20
+        ws2.row_dimensions[r2].height = 21
         values = [idx, f.rep_name, f.amount, f.reason or "-"]
-        row_fill = PatternFill("solid", fgColor=RED_LIGHT if idx % 2 == 1 else "FEF2F2")
+        row_fill = PatternFill("solid", fgColor=RED_LIGHT if idx % 2 == 1 else WHITE)
         for ci, v in enumerate(values, start=1):
             c = ws2.cell(row=r2, column=ci, value=v)
             c.border = CELL_BORDER
             c.alignment = CENTER if ci != 4 else RIGHT_ALIGN
-            c.font = Font(name="Calibri", size=11, bold=(ci == 2))
+            c.font = Font(name="Calibri", size=11, bold=(ci in (2, 3)), color=INK)
             if ci == 3:
                 c.number_format = '#,##0.00 "ج.م"'
             c.fill = row_fill
@@ -810,20 +790,22 @@ def api_export_csv():
 
     if fines:
         total_row2 = r2
-        ws2.cell(row=total_row2, column=1, value="إجمالي الغرامات").font = Font(bold=True, color="FFFFFF")
+        ws2.row_dimensions[total_row2].height = 26
+        ws2.cell(row=total_row2, column=1, value="إجمالي الغرامات").font = Font(bold=True, size=11, color=WHITE)
         ws2.merge_cells(start_row=total_row2, start_column=1, end_row=total_row2, end_column=2)
         ws2.cell(row=total_row2, column=1).alignment = Alignment(horizontal="right", vertical="center", indent=1)
         c_total = ws2.cell(row=total_row2, column=3, value=f"=SUM(C{header_row2+1}:C{r2-1})")
         c_total.number_format = '#,##0.00 "ج.م"'
         for c in (ws2.cell(row=total_row2, column=1), c_total, ws2.cell(row=total_row2, column=4)):
-            c.font = Font(bold=True, color="FFFFFF")
-            c.border = CELL_BORDER
+            c.font = Font(bold=True, color=WHITE, size=11)
+            c.border = OUTER_BORDER
             c.fill = PatternFill("solid", fgColor=RED)
             c.alignment = CENTER
     else:
         ws2.cell(row=header_row2 + 1, column=1, value="لا توجد غرامات مسجلة لهذا الشيفت")
         ws2.merge_cells(start_row=header_row2+1, start_column=1, end_row=header_row2+1, end_column=ncols2)
         ws2.cell(row=header_row2+1, column=1).alignment = CENTER
+        ws2.cell(row=header_row2+1, column=1).font = Font(bold=True, size=11, color=INK)
 
     col_widths2 = [6, 28, 16, 42]
     for i, w in enumerate(col_widths2, start=1):
