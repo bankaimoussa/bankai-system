@@ -211,24 +211,30 @@ def api_cortex_request():
 
 @app.route("/api/cortex/claim", methods=["POST"])
 def api_cortex_claim():
-    """الاسكريبت (شغال على logistics.amazon.eg) بيعمل polling على ده كل شوية.
-    بيرجع أقدم طلب pending واحد بس، وفي نفس اللحظة يحوّل حالته لـ claimed
-    عشان لو الاسكريبت طلب تاني قبل ما يخلص الأول، محدش ياخد نفس الطلب مرتين."""
-    req = (
+    """الاسكريبت بيعمل polling على ده كل شوية. بيرجع *كل* الطلبات الـ
+    pending دفعة واحدة (مش واحد بس)، ويحوّل حالتهم كلهم لـ claimed في
+    نفس اللحظة، عشان الاسكريبت يشتغل عليهم واحد ورا التاني من غير ما
+    يستنى دورة polling جديدة بين كل طلب والتاني.
+
+    بنستخدم SELECT ... FOR UPDATE SKIP LOCKED عشان لو فاتح أكتر من
+    تاب/نافذة Amazon في نفس الوقت، كل تاب ياخد طلبات مختلفة ومحدش
+    ياخد نفس الطلب مرتين."""
+    reqs = (
         CortexRequest.query.filter_by(status="pending")
         .order_by(CortexRequest.id.asc())
-        .first()
+        .with_for_update(skip_locked=True)
+        .all()
     )
-    if not req:
-        return jsonify({"ok": True, "request": None})
+    if not reqs:
+        return jsonify({"ok": True, "requests": []})
 
-    req.status = "claimed"
+    for r in reqs:
+        r.status = "claimed"
     db.session.commit()
 
-    return jsonify({"ok": True, "request": {
-        "request_uid": req.request_uid,
-        "short_name": req.short_name,
-    }})
+    return jsonify({"ok": True, "requests": [
+        {"request_uid": r.request_uid, "short_name": r.short_name} for r in reqs
+    ]})
 
 
 @app.route("/api/cortex/upload", methods=["POST"])
