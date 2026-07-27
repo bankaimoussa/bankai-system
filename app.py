@@ -209,6 +209,28 @@ def api_cortex_request():
     return jsonify({"ok": True, "request": req.to_dict()})
 
 
+@app.route("/api/cortex/claim", methods=["POST"])
+def api_cortex_claim():
+    """الاسكريبت (شغال على logistics.amazon.eg) بيعمل polling على ده كل شوية.
+    بيرجع أقدم طلب pending واحد بس، وفي نفس اللحظة يحوّل حالته لـ in_progress
+    عشان لو الاسكريبت طلب تاني قبل ما يخلص الأول، محدش ياخد نفس الطلب مرتين."""
+    req = (
+        CortexRequest.query.filter_by(status="pending")
+        .order_by(CortexRequest.id.asc())
+        .first()
+    )
+    if not req:
+        return jsonify({"ok": True, "request": None})
+
+    req.status = "in_progress"
+    db.session.commit()
+
+    return jsonify({"ok": True, "request": {
+        "request_uid": req.request_uid,
+        "short_name": req.short_name,
+    }})
+
+
 @app.route("/api/cortex/upload", methods=["POST"])
 def api_cortex_upload():
     """الاسكريبت بيرفع ملف الـ CSV هنا بعد ما يحمله من Amazon Logistics.
