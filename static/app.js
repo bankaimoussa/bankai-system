@@ -490,6 +490,40 @@ const App = (function () {
 
     function findRep(name) { return repsCache.find(r => r.name === name); }
 
+    // بيحدّث صف واحد بس في الـ DOM بدل ما يعيد بناء الجدول كله.
+    // ده اللي بيحل مشكلة الـ re-render: أي تفاعل (حضور/أوردر/miss/حفظ)
+    // ماكانش لازم يهد كل الصفوف ويعيد رسمها، ده كان بيسبب:
+    //  - فقدان الـ focus من أي حقل تاني المشرف بيكتب فيه في نفس اللحظة
+    //  - وميض بصري على كل الجدول مش بس الصف اللي اتغير
+    //  - إعادة تشغيل الـ animations على كل الصفوف من الأول
+    function updateRow(name) {
+        const rep = findRep(name);
+        if (!rep) return;
+
+        const table = document.getElementById('repsTable');
+        const oldRow = table.querySelector(`tbody tr[data-name="${cssEscape(name)}"]`);
+        if (!oldRow) { renderTable(); return; } // الصف مش موجود دلوقتي (مثلاً تاب مختلف) -> رجّع لل rebuild الكامل
+
+        const idx = repsCache.filter(r => r.type === rep.type).indexOf(rep);
+        const wrapper = document.createElement('tbody');
+        wrapper.innerHTML = renderRow(rep, idx < 0 ? 0 : idx);
+        const newRow = wrapper.firstElementChild;
+
+        // نحافظ على حالة العرض/الفلترة الحالية للصف (لو المستخدم فلتر أو بحث)
+        newRow.style.display = oldRow.style.display;
+        newRow.style.opacity = oldRow.style.opacity || '1';
+        newRow.style.transform = oldRow.style.transform || 'none';
+        // نمنع animation الدخول (rowIn) من إنها تشتغل تاني على الصف ده بس،
+        // عشان مافيش وميض دخول كل ما تتغير قيمة واحدة فيه
+        newRow.style.animation = 'none';
+
+        oldRow.replaceWith(newRow);
+
+        // Flash خفيف بديل يوضح إن الصف اتحدّث، من غير ما يعيد كل الـ entrance animation
+        newRow.classList.add('row-updated');
+        setTimeout(() => newRow.classList.remove('row-updated'), 400);
+    }
+
     // ============================================================
     // Cortex UI
     // ============================================================
@@ -537,7 +571,7 @@ const App = (function () {
 
         clearCortexPoll(name);
         cortexState[name] = { status: 'pending' };
-        renderTable();
+        updateRow(name);
 
         let resp;
         try {
@@ -553,7 +587,7 @@ const App = (function () {
             });
         } catch (e) {
             cortexState[name] = { status: 'failed' };
-            renderTable();
+            updateRow(name);
             return;
         }
 
@@ -579,7 +613,7 @@ const App = (function () {
 
         if (Date.now() - startedAt > CORTEX_POLL_TIMEOUT_MS) {
             cortexState[name] = { status: 'failed' };
-            renderTable();
+            updateRow(name);
             return;
         }
 
@@ -602,10 +636,10 @@ const App = (function () {
                     request_uid: requestUid,
                     suggested_orders: req.suggested_orders,
                 };
-                renderTable();
+                updateRow(name);
             } else if (req.status === 'failed') {
                 cortexState[name] = { status: 'failed' };
-                renderTable();
+                updateRow(name);
             } else {
                 pollCortexStatus(name, requestUid, startedAt);
             }
@@ -633,7 +667,7 @@ const App = (function () {
     function dismissCortex(name) {
         clearCortexPoll(name);
         cortexState[name] = { status: 'idle' };
-        renderTable();
+        updateRow(name);
     }
 
     // ============================================================
@@ -645,7 +679,7 @@ const App = (function () {
         rep.attendance = type;
         rep.reason = null;
         rep.saved = false;
-        renderTable();
+        updateRow(name);
         updateStats();
         await persist(rep, { attendance: type, reason: null, saved: false });
     }
@@ -655,7 +689,7 @@ const App = (function () {
         const rep = findRep(name);
         rep.reason = reason;
         rep.saved = false;
-        renderTable();
+        updateRow(name);
         await persist(rep, { reason, saved: false });
     }
 
@@ -664,7 +698,7 @@ const App = (function () {
         const rep = findRep(name);
         rep[field] = Math.max(0, (rep[field] || 0) + delta);
         rep.saved = false;
-        renderTable();
+        updateRow(name);
         updateStats();
         await persist(rep, { [field]: rep[field], saved: false });
     }
@@ -674,7 +708,7 @@ const App = (function () {
         const rep = findRep(name);
         rep[field] = Math.max(0, parseInt(val) || 0);
         rep.saved = false;
-        renderTable();
+        updateRow(name);
         updateStats();
         await persist(rep, { [field]: rep[field], saved: false });
     }
@@ -692,7 +726,7 @@ const App = (function () {
             },
         });
         rep.attendance = null; rep.reason = null; rep.orders = 0; rep.miss = 0; rep.saved = false;
-        renderTable();
+        updateRow(name);
         updateStats();
         showToast('تم', 'تم إعادة تعيين البيانات');
     }
@@ -706,7 +740,7 @@ const App = (function () {
         }
         rep.saved = true;
         await persist(rep, { saved: true });
-        renderTable();
+        updateRow(name);
         showToast('تم الحفظ ✓', `تم حفظ تقييم ${rep.name}`);
         setTimeout(() => {
             const row = document.querySelector(`tr[data-name="${cssEscape(rep.name)}"]`);
