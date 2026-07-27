@@ -380,6 +380,10 @@ const App = (function () {
                 ${filtered.map((rep, i) => renderRow(rep, i)).join('')}
             </tbody>
         `;
+
+        // الجدول اتعمله rebuild كامل دلوقتي، فلازم نرجّع نطبّق البحث/الفلتر
+        // اللي المشرف كاتبه، وإلا هيفضل يتمسح بصريًا كل ما نعمل renderTable
+        applyFilter();
     }
 
     function updateTypeTabCounts() {
