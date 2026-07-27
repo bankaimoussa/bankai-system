@@ -11,6 +11,21 @@ const App = (function () {
     const avatarColors = ['#2563eb', '#06b6d4', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
 
     // ============================================================
+    // Cortex — جلب أوردرات المندوب أوتوماتيك من Amazon Logistics
+    // ============================================================
+    // rep name -> { status: 'idle'|'pending'|'uploaded'|'failed', request_uid, suggested_orders, pollTimer }
+    const cortexState = {};
+    const CORTEX_CHANNEL_NAME = 'bankai_cortex';
+    const CORTEX_POLL_INTERVAL_MS = 2000;
+    const CORTEX_POLL_TIMEOUT_MS = 60000; // نستنى دقيقة، بعدها نعتبره فشل صامت
+    let cortexChannel = null;
+    try {
+        cortexChannel = new BroadcastChannel(CORTEX_CHANNEL_NAME);
+    } catch (e) {
+        cortexChannel = null; // متصفح قديم مش بيدعم BroadcastChannel
+    }
+
+    // ============================================================
     // Init
     // ============================================================
     async function init() {
@@ -447,6 +462,7 @@ const App = (function () {
                         <input type="number" class="stepper-input" value="${orders}" min="0" ${disabled ? 'disabled' : ''} onchange="App.setNum('${escapeJs(rep.name)}','orders',this.value)">
                         <button class="stepper-btn" ${disabled ? 'disabled' : ''} onclick="App.stepNum('${escapeJs(rep.name)}','orders',1)">+</button>
                     </div>
+                    ${renderCortexCell(rep, disabled)}
                 </td>
                 <td class="center">
                     <div class="stepper miss">
@@ -476,6 +492,160 @@ const App = (function () {
     }
 
     function findRep(name) { return repsCache.find(r => r.name === name); }
+
+    // ============================================================
+    // Cortex UI
+    // ============================================================
+    function renderCortexCell(rep, disabled) {
+        const st = cortexState[rep.name];
+
+        if (!st || st.status === 'idle') {
+            return `
+                <button class="icon-btn cortex-btn" ${disabled ? 'disabled' : ''}
+                    onclick="App.startCortex('${escapeJs(rep.name)}')" title="جلب الأوردرات من Amazon (Cortex)">
+                    ⚡ Cortex
+                </button>
+            `;
+        }
+        if (st.status === 'pending') {
+            return `<div class="cortex-status pending">⏳ مستني الاسكريبت...</div>`;
+        }
+        if (st.status === 'failed') {
+            return `
+                <div class="cortex-status failed">
+                    ✕ فشل الجلب
+                    <button class="icon-btn cortex-btn" ${disabled ? 'disabled' : ''}
+                        onclick="App.startCortex('${escapeJs(rep.name)}')" title="إعادة المحاولة">↻</button>
+                </div>
+            `;
+        }
+        if (st.status === 'uploaded') {
+            return `
+                <div class="cortex-status suggested">
+                    مقترح: <b>${st.suggested_orders}</b> أوردر
+                    <button class="icon-btn cortex-accept" ${disabled ? 'disabled' : ''}
+                        onclick="App.acceptCortex('${escapeJs(rep.name)}')" title="قبول">✓</button>
+                    <button class="icon-btn cortex-dismiss" ${disabled ? 'disabled' : ''}
+                        onclick="App.dismissCortex('${escapeJs(rep.name)}')" title="تجاهل">✕</button>
+                </div>
+            `;
+        }
+        return '';
+    }
+
+    async function startCortex(name) {
+        if (shiftClosed) return;
+        const rep = findRep(name);
+        if (!rep) return;
+
+        if (!cortexChannel) {
+            showToast('خطأ', 'المتصفح ده مش بيدعم Cortex', 'error');
+            return;
+        }
+
+        clearCortexPoll(name);
+        cortexState[name] = { status: 'pending' };
+        renderTable();
+
+        let resp;
+        try {
+            resp = await fetchJSON('/api/cortex/request', {
+                method: 'POST',
+                body: {
+                    branch: session.branch,
+                    supervisor_id: session.supervisor_id,
+                    supervisor_shift_id: session.shift_id,
+                    day: session.day,
+                    rep_name: name,
+                },
+            });
+        } catch (e) {
+            cortexState[name] = { status: 'failed' };
+            renderTable();
+            return;
+        }
+
+        const req = resp.request;
+        cortexState[name].request_uid = req.request_uid;
+
+        // إشارة للاسكريبت في تاب Amazon Logistics عبر BroadcastChannel
+        cortexChannel.postMessage({
+            request_uid: req.request_uid,
+            short_name: req.short_name,
+        });
+
+        pollCortexStatus(name, req.request_uid, Date.now());
+    }
+
+    function clearCortexPoll(name) {
+        const st = cortexState[name];
+        if (st && st.pollTimer) {
+            clearTimeout(st.pollTimer);
+        }
+    }
+
+    function pollCortexStatus(name, requestUid, startedAt) {
+        const st = cortexState[name];
+        if (!st || st.request_uid !== requestUid) return; // اتلغى أو استُبدل بطلب جديد
+
+        if (Date.now() - startedAt > CORTEX_POLL_TIMEOUT_MS) {
+            cortexState[name] = { status: 'failed' };
+            renderTable();
+            return;
+        }
+
+        st.pollTimer = setTimeout(async () => {
+            let data;
+            try {
+                data = await fetchJSON(`/api/cortex/status/${requestUid}`);
+            } catch (e) {
+                pollCortexStatus(name, requestUid, startedAt);
+                return;
+            }
+
+            const current = cortexState[name];
+            if (!current || current.request_uid !== requestUid) return; // اتلغى في الأثناء
+
+            const req = data.request;
+            if (req.status === 'uploaded') {
+                cortexState[name] = {
+                    status: 'uploaded',
+                    request_uid: requestUid,
+                    suggested_orders: req.suggested_orders,
+                };
+                renderTable();
+            } else if (req.status === 'failed') {
+                cortexState[name] = { status: 'failed' };
+                renderTable();
+            } else {
+                pollCortexStatus(name, requestUid, startedAt);
+            }
+        }, CORTEX_POLL_INTERVAL_MS);
+    }
+
+    async function acceptCortex(name) {
+        const st = cortexState[name];
+        if (!st || st.status !== 'uploaded') return;
+
+        try {
+            await fetchJSON('/api/cortex/apply', {
+                method: 'POST',
+                body: { request_uid: st.request_uid },
+            });
+        } catch (e) {
+            return;
+        }
+
+        cortexState[name] = { status: 'idle' };
+        showToast('تم', `اتحطت ${st.suggested_orders} أوردر لـ ${name}`, 'success');
+        await loadReps();
+    }
+
+    function dismissCortex(name) {
+        clearCortexPoll(name);
+        cortexState[name] = { status: 'idle' };
+        renderTable();
+    }
 
     // ============================================================
     // Mutations (optimistic local update + API save)
@@ -963,6 +1133,7 @@ const App = (function () {
 
     return {
         init, logout, setAtt, setReason, stepNum, setNum, resetRow, saveOne, deleteFine,
+        startCortex, acceptCortex, dismissCortex,
     };
 })();
 
