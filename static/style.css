@@ -1189,3 +1189,28 @@ input.form-select { cursor: text; appearance: auto; }
     position: relative;
 }
 .modal-actions .action-btn { flex: 1; justify-content: center; }
+
+/* ============================================================
+   AUTO SHIFT DISPLAY (شيفت المشرف تلقائي بعد اختياره)
+   ============================================================ */
+.auto-shift-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary-light, #93c5fd);
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.04));
+    border: 1.5px solid var(--primary);
+    color: var(--primary-dark);
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: -6px 0 20px;
+    animation: slideUp 0.3s ease;
+}
+.auto-shift-display strong { font-weight: 800; }
+[data-theme="dark"] .auto-shift-display {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: var(--primary);
+    color: var(--primary-light);
+}
