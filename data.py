@@ -12,17 +12,17 @@ SUPERVISOR_SHIFTS = [
     {"id": "sup_6_2", "label": "6:00 م - 2:00 ص", "start": 18, "end": 2},
 ]
 
-# ============ الفروع والمشرفين ============
+# ============ الفروع والمشرفين (كل مشرف مربوط بشيفته تلقائيًا) ============
 BRANCHES = {
     "qcd1": {"label": "QCD 1 - الفرع الأول", "supervisors": [
-        {"id": "S-001", "name": "محمد أحمد"},
-        {"id": "S-002", "name": "علي حسن"},
-        {"id": "S-003", "name": "ياسر محمود"},
+        {"id": "S-001", "name": "Elsaid", "shift_id": "sup_10_6"},
+        {"id": "S-002", "name": "Hussin", "shift_id": "sup_6_2"},
+        {"id": "S-003", "name": "Hamed", "shift_id": "sup_2_10"},
     ]},
     "qcd2": {"label": "QCD 2 - الفرع الثاني", "supervisors": [
-        {"id": "S-004", "name": "Saad"},
-        {"id": "S-005", "name": "Bankai"},
-        {"id": "S-006", "name": "Taha"},
+        {"id": "S-004", "name": "Saad", "shift_id": "sup_10_6"},
+        {"id": "S-005", "name": "Bankai", "shift_id": "sup_6_2"},
+        {"id": "S-006", "name": "Taha", "shift_id": "sup_2_10"},
     ]},
 }
 
@@ -80,7 +80,53 @@ REPS_QCD2 = [
     {"name": "Kareem Ragab Mohammed", "type": "full", "start": 23},
 ]
 
-REPS_QCD1 = []  # هيتضاف بعدين
+REPS_QCD1 = [
+    {"name": "Abdelhamid Abdelhamid", "type": "full", "start": 7},
+    {"name": "Ahmed Aamer Qasem", "type": "full", "start": 7},
+    {"name": "Amr Mohammed", "type": "full", "start": 7},
+    {"name": "Mahmood Ayman Mahmood", "type": "full", "start": 7},
+    {"name": "Mohammed Ahmed Shehata", "type": "full", "start": 7},
+    {"name": "Ahmed Maher Elsaid", "type": "full", "start": 7},
+    {"name": "Mohammed Kamal Ali Arkz", "type": "full", "start": 7},
+    {"name": "Abdelmged Ali Abdelmged", "type": "full", "start": 11},
+    {"name": "Gomaa Mohammed Gomaa", "type": "full", "start": 11},
+    {"name": "Raafat Mohammed Abdo", "type": "full", "start": 11},
+    {"name": "Mohamed Khamees", "type": "full", "start": 11},
+    {"name": "Mohamed Essam Mohamed", "type": "full", "start": 11},
+    {"name": "Shaaban Mohmoud Shaaban", "type": "full", "start": 11},
+    {"name": "badr mohamed saber", "type": "full", "start": 11},
+    {"name": "Mahmood Mohammed Alsayed", "type": "full", "start": 17},
+    {"name": "magdy mohamed reizk", "type": "full", "start": 17},
+    {"name": "ziad osama abdelsalam", "type": "full", "start": 17},
+    {"name": "Saher Ahmed Sayed", "type": "full", "start": 17},
+    {"name": "Youssef Hamdy Ismail", "type": "full", "start": 17},
+    {"name": "Abdelrahman Mohamed Mohamed", "type": "full", "start": 18},
+    {"name": "Fares Mohamed Attya", "type": "full", "start": 18},
+    {"name": "Mohamed Fawzy Mohamed", "type": "full", "start": 20},
+    {"name": "mostafa ramdan abdelkader", "type": "full", "start": 20},
+    {"name": "Marwan Ahmed Abdullah", "type": "full", "start": 20},
+    {"name": "Walid Mohammed", "type": "full", "start": 21},
+    {"name": "Youssef Hanfy Mohamed", "type": "full", "start": 21},
+    {"name": "Boola Noaman Aziz", "type": "full", "start": 21},
+    {"name": "Mostafa Zein", "type": "full", "start": 23},
+    {"name": "Abdelrahman Sabry Osman", "type": "part", "start": 12},
+    {"name": "Ziad Ahmed Mohamed", "type": "part", "start": 12},
+    {"name": "Mohamed Samy Alwan", "type": "part", "start": 12},
+    {"name": "Mahmoud Ibrahim Mahmoud", "type": "part", "start": 12},
+    {"name": "Fady Abdal Bara Salem", "type": "part", "start": 12},
+    {"name": "Mahmoud Khaled Mahmoud", "type": "part", "start": 12},
+    {"name": "Mahmoud Hassan Abdalzaher", "type": "part", "start": 12},
+    {"name": "Seif eldien elSayed", "type": "part", "start": 12},
+    {"name": "Mohamed Elsaid Mohamed", "type": "part", "start": 12},
+    {"name": "Sami Zaky", "type": "part", "start": 12},
+    {"name": "Mahmoud Mohamed Ali", "type": "part", "start": 12},
+    {"name": "Khaled Abdul Fattooh", "type": "part", "start": 12},
+    {"name": "Ahmed Fawzy Mohammed", "type": "part", "start": 12},
+    {"name": "Mohammed Tawfiq Saad", "type": "part", "start": 12},
+    {"name": "Mohammed Adel Mohammed", "type": "part", "start": 12},
+    {"name": "Mohamed mohamed hamed", "type": "part", "start": 12},
+    {"name": "Mohammed Magdy Ezzeldeen", "type": "part", "start": 12},
+]
 
 REPS_BY_BRANCH = {
     "qcd1": REPS_QCD1,
